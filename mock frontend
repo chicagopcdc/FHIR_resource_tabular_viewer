@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FHIR Resource Viewer - Patient Search</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+    <div class="flex min-h-screen">
+        <!-- Sidebar (Hidden by Default) -->
+        <div id="sidebar" class="w-64 bg-gray-800 text-white p-6 fixed h-full hidden">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold">FHIR Filters</h2>
+                <button id="closeSidebarBtn" class="text-white bg-red-500 px-2 py-1 rounded">Close</button>
+            </div>
+            <!-- Allergies Dropdown -->
+            <div class="mb-4">
+                <label for="allergiesFilter" class="block text-sm font-medium mb-2">Allergies</label>
+                <select id="allergiesFilter" class="w-full p-2 bg-gray-700 rounded text-white">
+                    <option value="">All Allergies</option>
+                </select>
+            </div>
+            <!-- Appointments Dropdown -->
+            <div class="mb-4">
+                <label for="appointmentsFilter" class="block text-sm font-medium mb-2">Appointments</label>
+                <select id="appointmentsFilter" class="w-full p-2 bg-gray-700 rounded text-white">
+                    <option value="">All Appointments</option>
+                </select>
+            </div>
+            <!-- Care Team Dropdown -->
+            <div class="mb-4">
+                <label for="careTeamFilter" class="block text-sm font-medium mb-2">Care Team</label>
+                <select id="careTeamFilter" class="w-full p-2 bg-gray-700 rounded text-white">
+                    <option value="">All Care Team</option>
+                </select>
+            </div>
+            <!-- Conditions Dropdown -->
+            <div class="mb-4">
+                <label for="conditionsFilter" class="block text-sm font-medium mb-2">Conditions</label>
+                <select id="conditionsFilter" class="w-full p-2 bg-gray-700 rounded text-white">
+                    <option value="">All Conditions</option>
+                </select>
+            </div>
+            <!-- Procedures Dropdown -->
+            <div class="mb-4">
+                <label for="proceduresFilter" class="block text-sm font-medium mb-2">Procedures</label>
+                <select id="proceduresFilter" class="w-full p-2 bg-gray-700 rounded text-white">
+                    <option value="">All Procedures</option>
+                </select>
+            </div>
+            <!-- Service Requests Dropdown -->
+            <div class="mb-4">
+                <label for="serviceRequestsFilter" class="block text-sm font-medium mb-2">Service Requests</label>
+                <select id="serviceRequestsFilter" class="w-full p-2 bg-gray-700 rounded text-white">
+                    <option value="">All Service Requests</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div id="mainContent" class="flex-1 p-6 transition-all duration-300">
+            <!-- Header -->
+            <h1 class="text-3xl font-bold mb-4">FHIR Resource Viewer - Patient Search</h1>
+            <p class="text-gray-600 mb-6">Current Date and Time: 10:24 PM IST, Monday, June 16, 2025</p>
+
+            <!-- Main Search Page -->
+            <div id="searchPage" class="bg-white p-6 rounded-lg shadow">
+                <!-- Filters and Actions -->
+                <div class="flex justify-between mb-4">
+                    <div class="flex space-x-2">
+                        <button id="filterBtn" class="bg-gray-200 px-4 py-2 rounded flex items-center">
+                            ⚙️ Quick Filters
+                        </button>
+                    </div>
+                    <div class="flex space-x-2">
+                        <div class="relative">
+                            <button id="exportBtn" class="bg-gray-200 px-4 py-2 rounded flex items-center">
+                                📥 Export
+                            </button>
+                            <div id="exportMenu" class="absolute hidden bg-white shadow-lg rounded mt-2 p-4">
+                                <a href="#" class="block">CSV</a>
+                                <a href="#" class="block">Excel</a>
+                                <a href="#" class="block">PDF</a>
+                            </div>
+                        </div>
+                        <button class="bg-gray-200 px-4 py-2 rounded">🔄 Refresh</button>
+                        <button class="bg-gray-200 px-4 py-2 rounded">⚙️ Settings</button>
+                    </div>
+                </div>
+
+                <!-- Search Bar -->
+                <div class="mb-4">
+                    <input id="searchInput" type="text" placeholder="Search" class="w-full p-2 border rounded">
+                </div>
+
+                <!-- Dynamic Table -->
+                <div class="overflow-x-auto">
+                    <table id="dynamicTable" class="w-full border-collapse">
+                        <thead id="dynamicTableHead">
+                            <tr class="bg-gray-200">
+                                <th class="p-2">ID</th>
+                                <th class="p-2">Name</th>
+                                <th class="p-2">Birth Date</th>
+                                <th class="p-2">Age</th>
+                                <th class="p-2">Gender</th>
+                                <th class="p-2">Phone</th>
+                                <th class="p-2">Email</th>
+                                <th class="p-2">Address</th>
+                                <th class="p-2">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dynamicTableBody">
+                            <!-- Data will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="flex justify-between mt-4">
+                    <div>
+                        <span>Showing <span id="recordCount">1-13</span> of 13 records</span>
+                        <select id="pageSize" class="ml-2 p-1 border rounded">
+                            <option value="25">25 per page</option>
+                            <option value="50">50 per page</option>
+                            <option value="100">100 per page</option>
+                        </select>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="prevPage" class="bg-gray-200 px-4 py-2 rounded">← Prev</button>
+                        <span id="currentPage">1</span>
+                        <button id="nextPage" class="bg-gray-200 px-4 py-2 rounded">Next →</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Patient Details Page -->
+            <div id="detailsPage" class="hidden bg-white p-6 rounded-lg shadow">
+                <button id="backBtn" class="mb-4 bg-gray-200 px-4 py-2 rounded">Back to Search</button>
+                <h2 id="patientName" class="text-2xl font-bold mb-4"></h2>
+
+                <!-- Tabs -->
+                <div class="flex border-b mb-4">
+                    <button id="generalTab" class="tab px-4 py-2 font-semibold border-b-2 border-blue-500">General</button>
+                    <button id="labsTab" class="tab px-4 py-2 font-semibold">Labs</button>
+                    <button id="notesTab" class="tab px-4 py-2 font-semibold">Notes</button>
+                </div>
+
+                <!-- Tab Content -->
+                <div id="generalContent" class="tab-content">
+                    <!-- General Information will be populated by JavaScript -->
+                </div>
+                <div id="labsContent" class="tab-content hidden">
+                    <input id="labsSearch" type="text" placeholder="Search Labs" class="w-full p-2 mb-4 border rounded">
+                    <table id="labsTable" class="w-full border-collapse">
+                        <thead>
+                            <tr class="bg-gray-200">
+                                <th class="p-2">Type</th>
+                                <th class="p-2">Code</th>
+                                <th class="p-2">Status</th>
+                                <th class="p-2">Date</th>
+                                <th class="p-2">Result</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Labs data will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="notesContent" class="tab-content hidden">
+                    <input id="notesSearch" type="text" placeholder="Search Notes" class="w-full p-2 mb-4 border rounded">
+                    <table id="notesTable" class="w-full border-collapse">
+                        <thead>
+                            <tr class="bg-gray-200">
+                                <th class="p-2">Type</th>
+                                <th class="p-2">Date</th>
+                                <th class="p-2">Author</th>
+                                <th class="p-2">Content</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Notes data will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Patient data
+        const patients = [
+            {
+                id: 'PT-001', name: 'John Doe', birthDate: '1985-03-15', age: 40, gender: 'Male',
+                phone: '+1-555-0123', email: '[email protected]', address: '123 Main St, NY', status: 'Active',
+                general: {
+                    maritalStatus: 'Single', language: 'English (Preferred)',
+                    allergies: [{ status: 'Active', verification: 'Confirmed', description: 'Peanut Allergy' }],
+                    appointments: [{ type: 'General Checkup', startTime: '2023-07-01 09:00:00 UTC', endTime: '2023-07-01 09:30:00 UTC', location: 'Austin General Clinic', status: 'Completed', instructions: 'Please fast for 8 hours prior to the appointment.' }],
+                    careTeam: [{ role: 'Primary Care Physician', name: 'Dr. Smith', status: 'Active', period: '2020-01-01 to Present' }],
+                    conditions: [{ category: 'Problem List Item', code: 'Hypertension (I10)', status: 'Active', verification: 'Confirmed', onsetDate: '2018-05-10', encounter: '-' }],
+                    procedures: [{ category: 'Diagnostic procedure', code: 'Blood Pressure Monitoring (93784)', status: 'Completed', performedDate: '2023-07-01 09:15:00 UTC', location: 'Austin General Clinic', reason: 'Hypertension' }],
+                    serviceRequests: [{ category: 'Laboratory', code: 'Blood Test (80053)', status: 'Completed', occurrence: '2023-07-01 09:30:00 UTC', reason: 'Hypertension Monitoring', encounter: 'General Checkup (12345)' }]
+                },
+                labs: [
+                    { type: 'DiagnosticReport', code: 'Blood Test (80053)', status: 'Completed', date: '2023-07-01 09:30:00 UTC', result: 'Normal' },
+                    { type: 'Observation', code: 'Blood Pressure (93784)', status: 'Completed', date: '2023-07-01 09:15:00 UTC', result: '120/80 mmHg' }
+                ],
+                notes: [
+                    { type: 'Progress Note', date: '2023-07-01', author: 'Dr. Smith', content: 'Patient presents for routine checkup. BP stable.' },
+                    { type: 'Consultation Note', date: '2023-06-15', author: 'Dr. Jones', content: 'Reviewed patient history for hypertension management.' }
+                ]
+            },
+            {
+                id: 'PT-002', name: 'Jane Smith', birthDate: '1990-07-22', age: 34, gender: 'Female',
+                phone: '+1-555-0124', email: '[email protected]', address: '456 Oak Ave, CA', status: 'Active',
+                general: {
+                    maritalStatus: 'Married', language: 'English (Preferred)',
+                    allergies: [{ status: 'Inactive', verification: 'Confirmed', description: 'No Known Allergies' }],
+                    appointments: [{ type: 'Dental Checkup', startTime: '2023-08-15 14:00:00 UTC', endTime: '2023-08-15 14:30:00 UTC', location: 'Houston Dental Care', status: 'Completed', instructions: 'Please brush your teeth before the appointment.' }],
+                    careTeam: [{ role: 'Dentist', name: 'Dr. Brown', status: 'Active', period: '2021-06-01 to Present' }],
+                    conditions: [{ category: 'Encounter Diagnosis', code: 'Dental Caries (K02.9)', status: '-', verification: '-', onsetDate: '-', encounter: 'Dental Visit (67890)' }],
+                    procedures: [{ category: 'Dental procedure', code: 'Dental Filling (D2391)', status: 'Completed', performedDate: '2023-08-15 14:15:00 UTC', location: 'Houston Dental Care', reason: 'Dental Caries' }],
+                    serviceRequests: [{ category: 'Dental', code: 'X-Ray Dental (D0210)', status: 'Completed', occurrence: '2023-08-15 14:00:00 UTC', reason: 'Dental Caries Evaluation', encounter: 'Dental Visit (67890)' }]
+                },
+                labs: [
+                    { type: 'DiagnosticReport', code: 'X-Ray Dental (D0210)', status: 'Completed', date: '2023-08-15 14:00:00 UTC', result: 'Caries confirmed in molar' },
+                    { type: 'Observation', code: 'Oral Exam (D0120)', status: 'Completed', date: '2023-08-15 14:10:00 UTC', result: 'Mild gingivitis observed' }
+                ],
+                notes: [
+                    { type: 'Progress Note', date: '2023-08-15', author: 'Dr. Brown', content: 'Dental filling completed successfully.' },
+                    { type: 'Follow-Up Note', date: '2023-09-01', author: 'Dr. Lee', content: 'Patient reports no pain post-procedure.' }
+                ]
+            },
+            {
+                id: 'PT-003', name: 'Michael Johnson', birthDate: '1978-11-08', age: 46, gender: 'Male',
+                phone: '+1-555-0125', email: '[email protected]', address: '789 Pine Rd, TX', status: 'Inactive',
+                general: {
+                    maritalStatus: 'Divorced', language: 'English (Preferred)',
+                    allergies: [{ status: 'Active', verification: 'Unconfirmed', description: 'Penicillin Allergy' }],
+                    appointments: [{ type: 'X-Ray Exam', startTime: '2023-06-02 20:45:00 UTC', endTime: '2023-06-02 21:15:00 UTC', location: 'EMH X-Ray Imaging', status: 'Arrived', instructions: 'No special preparation needed.' }],
+                    careTeam: [{ role: 'Radiologist', name: 'Dr. Wilson', status: 'Active', period: '2019-03-01 to Present' }],
+                    conditions: [{ category: 'Problem List Item', code: 'Asthma (J45.9)', status: 'Active', verification: 'Confirmed', onsetDate: '2010-03-01', encounter: '-' }],
+                    procedures: [{ category: 'Diagnostic procedure', code: 'Chest X-Ray (71045)', status: 'Completed', performedDate: '2023-06-02 20:45:00 UTC', location: 'EMH X-Ray Imaging', reason: 'Asthma evaluation' }],
+                    serviceRequests: [{ category: 'Radiology', code: 'Chest X-Ray (71045)', status: 'Completed', occurrence: '2023-06-02 20:45:00 UTC', reason: 'Asthma monitoring', encounter: 'X-Ray Exam (29547)' }]
+                },
+                labs: [
+                    { type: 'DiagnosticReport', code: 'Chest X-Ray (71045)', status: 'Completed', date: '2023-06-02 20:45:00 UTC', result: 'No acute abnormalities' },
+                    { type: 'Observation', code: 'Spirometry (94010)', status: 'Completed', date: '2023-06-01 10:00:00 UTC', result: 'FEV1 85% predicted' }
+                ],
+                notes: [
+                    { type: 'Consultation Note', date: '2023-06-02', author: 'Dr. Wilson', content: 'X-ray ordered to rule out pneumonia.' },
+                    { type: 'Progress Note', date: '2023-06-03', author: 'Dr. Taylor', content: 'Patient stable, asthma controlled.' }
+                ]
+            },
+            {
+                id: 'PT-004', name: 'Sarah Williams', birthDate: '1995-01-30', age: 30, gender: 'Female',
+                phone: '+1-555-0126', email: '[email protected]', address: '321 Elm St, FL', status: 'Active',
+                general: {
+                    maritalStatus: 'Single', language: 'English (Preferred)',
+                    allergies: [{ status: 'Inactive', verification: 'Confirmed', description: 'No Known Allergies' }],
+                    appointments: [{ type: 'General Checkup', startTime: '2023-09-20 10:00:00 UTC', endTime: '2023-09-20 10:30:00 UTC', location: 'Florida Health Clinic', status: 'Completed', instructions: 'No preparation required.' }],
+                    careTeam: [{ role: 'Neurologist', name: 'Dr. Davis', status: 'Active', period: '2022-01-01 to Present' }],
+                    conditions: [{ category: 'Problem List Item', code: 'Migraine (G43.9)', status: 'Active', verification: 'Confirmed', onsetDate: '2015-07-15', encounter: '-' }, { category: 'Problem List Item', code: 'Polycystic Ovaries (E28.2)', status: 'Active', verification: 'Confirmed', onsetDate: '2018-09-10', encounter: '-' }],
+                    procedures: [{ category: 'Diagnostic procedure', code: 'Neurological Exam (95816)', status: 'Completed', performedDate: '2023-09-20 10:15:00 UTC', location: 'Florida Health Clinic', reason: 'Migraine evaluation' }],
+                    serviceRequests: [{ category: 'Laboratory', code: 'Blood Test (85025)', status: 'Completed', occurrence: '2023-09-20 10:30:00 UTC', reason: 'General health screening', encounter: 'General Checkup (54321)' }]
+                },
+                labs: [
+                    { type: 'DiagnosticReport', code: 'Blood Test (85025)', status: 'Completed', date: '2023-09-20 10:30:00 UTC', result: 'Within normal limits' },
+                    { type: 'Observation', code: 'Headache Assessment (G43.9)', status: 'Completed', date: '2023-09-20 10:15:00 UTC', result: 'Moderate migraine symptoms' }
+                ],
+                notes: [
+                    { type: 'Progress Note', date: '2023-09-20', author: 'Dr. Davis', content: 'Patient reports frequent migraines, prescribed medication.' },
+                    { type: 'Follow-Up Note', date: '2023-10-05', author: 'Dr. Clark', content: 'Migraine frequency reduced with treatment.' }
+                ]
+            }
+        ];
+
+        // Initialize page
+        let currentPage = 1;
+        let pageSize = 25;
+        let currentPatient = null;
+        let currentFilter = { type: 'patients', value: '' }; // Track current filter (e.g., { type: 'conditions', value: 'Polycystic Ovaries (E28.2)' })
+
+        // DOM Elements
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('mainContent');
+        const filterBtn = document.getElementById('filterBtn');
+        const closeSidebarBtn = document.getElementById('closeSidebarBtn');
+        const allergiesFilter = document.getElementById('allergiesFilter');
+        const appointmentsFilter = document.getElementById('appointmentsFilter');
+        const careTeamFilter = document.getElementById('careTeamFilter');
+        const conditionsFilter = document.getElementById('conditionsFilter');
+        const proceduresFilter = document.getElementById('proceduresFilter');
+        const serviceRequestsFilter = document.getElementById('serviceRequestsFilter');
+        const searchPage = document.getElementById('searchPage');
+        const detailsPage = document.getElementById('detailsPage');
+        const dynamicTableHead = document.getElementById('dynamicTableHead');
+        const dynamicTableBody = document.getElementById('dynamicTableBody');
+        const searchInput = document.getElementById('searchInput');
+        const exportBtn = document.getElementById('exportBtn');
+        const exportMenu = document.getElementById('exportMenu');
+        const pageSizeSelect = document.getElementById('pageSize');
+        const prevPageBtn = document.getElementById('prevPage');
+        const nextPageBtn = document.getElementById('nextPage');
+        const recordCount = document.getElementById('recordCount');
+        const currentPageSpan = document.getElementById('currentPage');
+        const backBtn = document.getElementById('backBtn');
+        const generalTab = document.getElementById('generalTab');
+        const labsTab = document.getElementById('labsTab');
+        const notesTab = document.getElementById('notesTab');
+        const generalContent = document.getElementById('generalContent');
+        const labsContent = document.getElementById('labsContent');
+        const notesContent = document.getElementById('notesContent');
+        const labsSearch = document.getElementById('labsSearch');
+        const notesSearch = document.getElementById('notesSearch');
+        const labsTable = document.getElementById('labsTable').querySelector('tbody');
+        const notesTable = document.getElementById('notesTable').querySelector('tbody');
+
+        //  Dropdown Filters
+        function populateFilters() {
+            const allergies = new Set();
+            const appointments = new Set();
+            const careTeams = new Set();
+            const conditions = new Set();
+            const procedures = new Set();
+            const serviceRequests = new Set();
+
+            patients.forEach(patient => {
+                patient.general.allergies.forEach(item => allergies.add(item.description));
+                patient.general.appointments.forEach(item => appointments.add(item.type));
+                patient.general.careTeam.forEach(item => careTeams.add(item.name));
+                patient.general.conditions.forEach(item => conditions.add(item.code));
+                patient.general.procedures.forEach(item => procedures.add(item.code));
+                patient.general.serviceRequests.forEach(item => serviceRequests.add(item.code));
+            });
+
+            allergies.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item;
+                option.textContent = item;
+                allergiesFilter.appendChild(option);
+            });
+
+            appointments.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item;
+                option.textContent = item;
+                appointmentsFilter.appendChild(option);
+            });
+
+            careTeams.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item;
+                option.textContent = item;
+                careTeamFilter.appendChild(option);
+            });
+
+            conditions.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item;
+                option.textContent = item;
+                conditionsFilter.appendChild(option);
+            });
+
+            procedures.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item;
+                option.textContent = item;
+                proceduresFilter.appendChild(option);
+            });
+
+            serviceRequests.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item;
+                option.textContent = item;
+                serviceRequestsFilter.appendChild(option);
+            });
+        }
+
+        // Toggle Sidebar and  Main Content
+        filterBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('hidden');
+            if (sidebar.classList.contains('hidden')) {
+                mainContent.style.marginLeft = '0';
+            } else {
+                mainContent.style.marginLeft = '16rem'; // 64 = w-64 in Tailwind
+            }
+        });
+
+        closeSidebarBtn.addEventListener('click', () => {
+            sidebar.classList.add('hidden');
+            mainContent.style.marginLeft = '0';
+        });
+
+        // Filter Change Handlers
+        allergiesFilter.addEventListener('change', () => {
+            currentFilter = { type: 'allergies', value: allergiesFilter.value };
+            currentPage = 1;
+            renderTable();
+        });
+
+        appointmentsFilter.addEventListener('change', () => {
+            currentFilter = { type: 'appointments', value: appointmentsFilter.value };
+            currentPage = 1;
+            renderTable();
+        });
+
+        careTeamFilter.addEventListener('change', () => {
+            currentFilter = { type: 'careTeam', value: careTeamFilter.value };
+            currentPage = 1;
+            renderTable();
+        });
+
+        conditionsFilter.addEventListener('change', () => {
+            currentFilter = { type: 'conditions', value: conditionsFilter.value };
+            currentPage = 1;
+            renderTable();
+        });
+
+        proceduresFilter.addEventListener('change', () => {
+            currentFilter = { type: 'procedures', value: proceduresFilter.value };
+            currentPage = 1;
+            renderTable();
+        });
+
+        serviceRequestsFilter.addEventListener('change', () => {
+            currentFilter = { type: 'serviceRequests', value: serviceRequestsFilter.value };
+            currentPage = 1;
+            renderTable();
+        });
+
+        // Toggle Export Menu
+        exportBtn.addEventListener('click', () => {
+            exportMenu.classList.toggle('hidden');
+        });
+
+        //  Page Size
+        pageSizeSelect.addEventListener('change', (e) => {
+            pageSize = parseInt(e.target.value);
+            currentPage = 1;
+            renderTable();
+        });
+
+        // Pagination
+        prevPageBtn.addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                renderTable();
+            }
+        });
+
+        nextPageBtn.addEventListener('click', () => {
+            const maxPage = Math.ceil(getFilteredData().length / pageSize);
+            if (currentPage < maxPage) {
+                currentPage++;
+                renderTable();
+            }
+        });
+
+        // Search
+        searchInput.addEventListener('input', () => {
+            currentPage = 1;
+            renderTable();
+        });
+
+        // Labs Search
+        labsSearch.addEventListener('input', () => {
+            renderLabs();
+        });
+
+        // Notes Search
+        notesSearch.addEventListener('input', () => {
+            renderNotes();
+        });
+
+        // Back Button
+        backBtn.addEventListener('click', () => {
+            searchPage.classList.remove('hidden');
+            detailsPage.classList.add('hidden');
+            sidebar.classList.add('hidden');
+            mainContent.style.marginLeft = '0';
+            currentPatient = null;
+            renderTable();
+        });
+
+        // Tab Switching
+        const tabs = [generalTab, labsTab, notesTab];
+        const contents = [generalContent, labsContent, notesContent];
+
+        tabs.forEach((tab, index) => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => {
+                    t.classList.remove('border-blue-500');
+                    t.classList.add('border-transparent');
+                });
+                contents.forEach(c => c.classList.add('hidden'));
+
+                tab.classList.add('border-blue-500');
+                contents[index].classList.remove('hidden');
+
+                if (index === 1) renderLabs();
+                if (index === 2) renderNotes();
+            });
+        });
+
+        // Filtered Data Based on Current Filter
+        function getFilteredData() {
+            const searchTerm = searchInput.value.toLowerCase();
+            let data = [];
+
+            if (currentFilter.type === 'patients') {
+                data = patients.filter(patient => {
+                    return patient.name.toLowerCase().includes(searchTerm) ||
+                        patient.id.toLowerCase().includes(searchTerm) ||
+                        patient.email.toLowerCase().includes(searchTerm);
+                });
+            } else {
+                patients.forEach(patient => {
+                    let items = [];
+                    if (currentFilter.type === 'allergies') items = patient.general.allergies;
+                    else if (currentFilter.type === 'appointments') items = patient.general.appointments;
+                    else if (currentFilter.type === 'careTeam') items = patient.general.careTeam;
+                    else if (currentFilter.type === 'conditions') items = patient.general.conditions;
+                    else if (currentFilter.type === 'procedures') items = patient.general.procedures;
+                    else if (currentFilter.type === 'serviceRequests') items = patient.general.serviceRequests;
+
+                    items.forEach(item => {
+                        let matchesFilter = true;
+                        if (currentFilter.value) {
+                            if (currentFilter.type === 'allergies') matchesFilter = item.description === currentFilter.value;
+                            else if (currentFilter.type === 'appointments') matchesFilter = item.type === currentFilter.value;
+                            else if (currentFilter.type === 'careTeam') matchesFilter = item.name === currentFilter.value;
+                            else if (currentFilter.type === 'conditions') matchesFilter = item.code === currentFilter.value;
+                            else if (currentFilter.type === 'procedures') matchesFilter = item.code === currentFilter.value;
+                            else if (currentFilter.type === 'serviceRequests') matchesFilter = item.code === currentFilter.value;
+                        }
+
+                        let matchesSearch = true;
+                        if (searchTerm) {
+                            matchesSearch = Object.values(item).some(val =>
+                                typeof val === 'string' && val.toLowerCase().includes(searchTerm)
+                            ) || patient.name.toLowerCase().includes(searchTerm);
+                        }
+
+                        if (matchesFilter && matchesSearch) {
+                            data.push({ patient, item });
+                        }
+                    });
+                });
+            }
+
+            return data;
+        }
+
+        //  Dynamic Table
+        function renderTable() {
+            const filteredData = getFilteredData();
+            const start = (currentPage - 1) * pageSize;
+            const end = start + pageSize;
+            const paginatedData = filteredData.slice(start, end);
+
+            //  Table Headers
+            dynamicTableHead.innerHTML = '';
+            let headerRow = document.createElement('tr');
+            headerRow.className = 'bg-gray-200';
+
+            if (currentFilter.type === 'patients') {
+                headerRow.innerHTML = `
+                    <th class="p-2">ID</th>
+                    <th class="p-2">Name</th>
+                    <th class="p-2">Birth Date</th>
+                    <th class="p-2">Age</th>
+                    <th class="p-2">Gender</th>
+                    <th class="p-2">Phone</th>
+                    <th class="p-2">Email</th>
+                    <th class="p-2">Address</th>
+                    <th class="p-2">Status</th>
+                `;
+            } else if (currentFilter.type === 'allergies') {
+                headerRow.innerHTML = `
+                    <th class="p-2">Patient Name</th>
+                    <th class="p-2">Status</th>
+                    <th class="p-2">Verification</th>
+                    <th class="p-2">Description</th>
+                `;
+            } else if (currentFilter.type === 'appointments') {
+                headerRow.innerHTML = `
+                    <th class="p-2">Patient Name</th>
+                    <th class="p-2">Type</th>
+                    <th class="p-2">Start Time</th>
+                    <th class="p-2">End Time</th>
+                    <th class="p-2">Location</th>
+                    <th class="p-2">Status</th>
+                    <th class="p-2">Instructions</th>
+                `;
+            } else if (currentFilter.type === 'careTeam') {
+                headerRow.innerHTML = `
+                    <th class="p-2">Patient Name</th>
+                    <th class="p-2">Role</th>
+                    <th class="p-2">Name</th>
+                    <th class="p-2">Status</th>
+                    <th class="p-2">Period</th>
+                `;
+            } else if (currentFilter.type === 'conditions') {
+                headerRow.innerHTML = `
+                    <th class="p-2">Patient Name</th>
+                    <th class="p-2">Category</th>
+                    <th class="p-2">Code</th>
+                    <th class="p-2">Status</th>
+                    <th class="p-2">Verification</th>
+                    <th class="p-2">Onset Date</th>
+                    <th class="p-2">Encounter</th>
+                `;
+            } else if (currentFilter.type === 'procedures') {
+                headerRow.innerHTML = `
+                    <th class="p-2">Patient Name</th>
+                    <th class="p-2">Category</th>
+                    <th class="p-2">Code</th>
+                    <th class="p-2">Status</th>
+                    <th class="p-2">Performed Date</th>
+                    <th class="p-2">Location</th>
+                    <th class="p-2">Reason</th>
+                `;
+            } else if (currentFilter.type === 'serviceRequests') {
+                headerRow.innerHTML = `
+                    <th class="p-2">Patient Name</th>
+                    <th class="p-2">Category</th>
+                    <th class="p-2">Code</th>
+                    <th class="p-2">Status</th>
+                    <th class="p-2">Occurrence</th>
+                    <th class="p-2">Reason</th>
+                    <th class="p-2">Encounter</th>
+                `;
+            }
+
+            dynamicTableHead.appendChild(headerRow);
+
+            //  Table Body
+            dynamicTableBody.innerHTML = '';
+            paginatedData.forEach(data => {
+                const row = document.createElement('tr');
+                if (currentFilter.type === 'patients') {
+                    const patient = data;
+                    row.innerHTML = `
+                        <td class="p-2">${patient.id}</td>
+                        <td class="p-2"><a href="#" class="text-blue-600 patient-link" data-id="${patient.id}">${patient.name}</a></td>
+                        <td class="p-2">${patient.birthDate}</td>
+                        <td class="p-2">${patient.age}</td>
+                        <td class="p-2">${patient.gender}</td>
+                        <td class="p-2">${patient.phone}</td>
+                        <td class="p-2">${patient.email}</td>
+                        <td class="p-2">${patient.address}</td>
+                        <td class="p-2">${patient.status}</td>
+                    `;
+                } else {
+                    const { patient, item } = data;
+                    if (currentFilter.type === 'allergies') {
+                        row.innerHTML = `
+                            <td class="p-2"><a href="#" class="text-blue-600 patient-link" data-id="${patient.id}">${patient.name}</a></td>
+                            <td class="p-2">${item.status}</td>
+                            <td class="p-2">${item.verification}</td>
+                            <td class="p-2">${item.description}</td>
+                        `;
+                    } else if (currentFilter.type === 'appointments') {
+                        row.innerHTML = `
+                            <td class="p-2"><a href="#" class="text-blue-600 patient-link" data-id="${patient.id}">${patient.name}</a></td>
+                            <td class="p-2">${item.type}</td>
+                            <td class="p-2">${item.startTime}</td>
+                            <td class="p-2">${item.endTime}</td>
+                            <td class="p-2">${item.location}</td>
+                            <td class="p-2">${item.status}</td>
+                            <td class="p-2">${item.instructions}</td>
+                        `;
+                    } else if (currentFilter.type === 'careTeam') {
+                        row.innerHTML = `
+                            <td class="p-2"><a href="#" class="text-blue-600 patient-link" data-id="${patient.id}">${patient.name}</a></td>
+                            <td class="p-2">${item.role}</td>
+                            <td class="p-2">${item.name}</td>
+                            <td class="p-2">${item.status}</td>
+                            <td class="p-2">${item.period}</td>
+                        `;
+                    } else if (currentFilter.type === 'conditions') {
+                        row.innerHTML = `
+                            <td class="p-2"><a href="#" class="text-blue-600 patient-link" data-id="${patient.id}">${patient.name}</a></td>
+                            <td class="p-2">${item.category}</td>
+                            <td class="p-2">${item.code}</td>
+                            <td class="p-2">${item.status}</td>
+                            <td class="p-2">${item.verification}</td>
+                            <td class="p-2">${item.onsetDate}</td>
+                            <td class="p-2">${item.encounter}</td>
+                        `;
+                    } else if (currentFilter.type === 'procedures') {
+                        row.innerHTML = `
+                            <td class="p-2"><a href="#" class="text-blue-600 patient-link" data-id="${patient.id}">${patient.name}</a></td>
+                            <td class="p-2">${item.category}</td>
+                            <td class="p-2">${item.code}</td>
+                            <td class="p-2">${item.status}</td>
+                            <td class="p-2">${item.performedDate}</td>
+                            <td class="p-2">${item.location}</td>
+                            <td class="p-2">${item.reason}</td>
+                        `;
+                    } else if (currentFilter.type === 'serviceRequests') {
+                        row.innerHTML = `
+                            <td class="p-2"><a href="#" class="text-blue-600 patient-link" data-id="${patient.id}">${patient.name}</a></td>
+                            <td class="p-2">${item.category}</td>
+                            <td class="p-2">${item.code}</td>
+                            <td class="p-2">${item.status}</td>
+                            <td class="p-2">${item.occurrence}</td>
+                            <td class="p-2">${item.reason}</td>
+                            <td class="p-2">${item.encounter}</td>
+                        `;
+                    }
+                }
+                dynamicTableBody.appendChild(row);
+            });
+
+            //  Pagination
+            recordCount.textContent = `${start + 1}-${Math.min(end, filteredData.length)}`;
+            currentPageSpan.textContent = currentPage;
+            prevPageBtn.disabled = currentPage === 1;
+            nextPageBtn.disabled = currentPage >= Math.ceil(filteredData.length / pageSize);
+
+            // Click Handlers for Patient Links
+            document.querySelectorAll('.patient-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const patientId = e.target.dataset.id;
+                    currentPatient = patients.find(p => p.id === patientId);
+                    renderPatientDetails();
+                    searchPage.classList.add('hidden');
+                    detailsPage.classList.remove('hidden');
+                });
+            });
+        }
+
+        //  Patient Details
+        function renderPatientDetails() {
+            document.getElementById('patientName').textContent = `Patient Information - ${currentPatient.name}`;
+            
+            // General Information
+            generalContent.innerHTML = `
+                <div class="mb-4">
+                    <p><strong>Name:</strong> ${currentPatient.name}</p>
+                    <p><strong>Gender:</strong> ${currentPatient.gender}</p>
+                    <p><strong>Birth Date:</strong> ${currentPatient.birthDate}</p>
+                    <p><strong>Age:</strong> ${currentPatient.age}</p>
+                    <p><strong>Marital Status:</strong> ${currentPatient.general.maritalStatus}</p>
+                    <p><strong>Address:</strong> ${currentPatient.address}</p>
+                    <p><strong>Contact:</strong> ${currentPatient.phone}, ${currentPatient.email}</p>
+                    <p><strong>Language:</strong> ${currentPatient.general.language}</p>
+                </div>
+                <h3 class="text-xl font-semibold mb-2">Allergy Intolerance</h3>
+                <table class="w-full border-collapse mb-4">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="p-2">Status</th>
+                            <th class="p-2">Verification</th>
+                            <th class="p-2">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${currentPatient.general.allergies.map(allergy => `
+                            <tr>
+                                <td class="p-2">${allergy.status}</td>
+                                <td class="p-2">${allergy.verification}</td>
+                                <td class="p-2">${allergy.description}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <h3 class="text-xl font-semibold mb-2">Appointments</h3>
+                <table class="w-full border-collapse mb-4">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="p-2">Type</th>
+                            <th class="p-2">Start Time</th>
+                            <th class="p-2">End Time</th>
+                            <th class="p-2">Location</th>
+                            <th class="p-2">Status</th>
+                            <th class="p-2">Instructions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${currentPatient.general.appointments.map(appt => `
+                            <tr>
+                                <td class="p-2">${appt.type}</td>
+                                <td class="p-2">${appt.startTime}</td>
+                                <td class="p-2">${appt.endTime}</td>
+                                <td class="p-2">${appt.location}</td>
+                                <td class="p-2">${appt.status}</td>
+                                <td class="p-2">${appt.instructions}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <h3 class="text-xl font-semibold mb-2">Care Team</h3>
+                <table class="w-full border-collapse mb-4">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="p-2">Role</th>
+                            <th class="p-2">Name</th>
+                            <th class="p-2">Status</th>
+                            <th class="p-2">Period</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${currentPatient.general.careTeam.map(member => `
+                            <tr>
+                                <td class="p-2">${member.role}</td>
+                                <td class="p-2">${member.name}</td>
+                                <td class="p-2">${member.status}</td>
+                                <td class="p-2">${member.period}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <h3 class="text-xl font-semibold mb-2">Conditions</h3>
+                <table class="w-full border-collapse mb-4">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="p-2">Category</th>
+                            <th class="p-2">Code</th>
+                            <th class="p-2">Status</th>
+                            <th class="p-2">Verification</th>
+                            <th class="p-2">Onset Date</th>
+                            <th class="p-2">Encounter</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${currentPatient.general.conditions.map(condition => `
+                            <tr>
+                                <td class="p-2">${condition.category}</td>
+                                <td class="p-2">${condition.code}</td>
+                                <td class="p-2">${condition.status}</td>
+                                <td class="p-2">${condition.verification}</td>
+                                <td class="p-2">${condition.onsetDate}</td>
+                                <td class="p-2">${condition.encounter}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <h3 class="text-xl font-semibold mb-2">Procedures</h3>
+                <table class="w-full border-collapse mb-4">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="p-2">Category</th>
+                            <th class="p-2">Code</th>
+                            <th class="p-2">Status</th>
+                            <th class="p-2">Performed Date</th>
+                            <th class="p-2">Location</th>
+                            <th class="p-2">Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${currentPatient.general.procedures.map(proc => `
+                            <tr>
+                                <td class="p-2">${proc.category}</td>
+                                <td class="p-2">${proc.code}</td>
+                                <td class="p-2">${proc.status}</td>
+                                <td class="p-2">${proc.performedDate}</td>
+                                <td class="p-2">${proc.location}</td>
+                                <td class="p-2">${proc.reason}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <h3 class="text-xl font-semibold mb-2">Service Requests</h3>
+                <table class="w-full border-collapse">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="p-2">Category</th>
+                            <th class="p-2">Code</th>
+                            <th class="p-2">Status</th>
+                            <th class="p-2">Occurrence</th>
+                            <th class="p-2">Reason</th>
+                            <th class="p-2">Encounter</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${currentPatient.general.serviceRequests.map(req => `
+                            <tr>
+                                <td class="p-2">${req.category}</td>
+                                <td class="p-2">${req.code}</td>
+                                <td class="p-2">${req.status}</td>
+                                <td class="p-2">${req.occurrence}</td>
+                                <td class="p-2">${req.reason}</td>
+                                <td class="p-2">${req.encounter}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        //  Labs
+        function renderLabs() {
+            const searchTerm = labsSearch.value.toLowerCase();
+            labsTable.innerHTML = '';
+            currentPatient.labs
+                .filter(lab => lab.type.toLowerCase().includes(searchTerm) ||
+                    lab.code.toLowerCase().includes(searchTerm) ||
+                    lab.result.toLowerCase().includes(searchTerm))
+                .forEach(lab => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="p-2">${lab.type}</td>
+                        <td class="p-2">${lab.code}</td>
+                        <td class="p-2">${lab.status}</td>
+                        <td class="p-2">${lab.date}</td>
+                        <td class="p-2">${lab.result}</td>
+                    `;
+                    labsTable.appendChild(row);
+                });
+        }
+
+        //  Notes
+        function renderNotes() {
+            const searchTerm = notesSearch.value.toLowerCase();
+            notesTable.innerHTML = '';
+            currentPatient.notes
+                .filter(note => note.type.toLowerCase().includes(searchTerm) ||
+                    note.author.toLowerCase().includes(searchTerm) ||
+                    note.content.toLowerCase().includes(searchTerm))
+                .forEach(note => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="p-2">${note.type}</td>
+                        <td class="p-2">${note.date}</td>
+                        <td class="p-2">${note.author}</td>
+                        <td class="p-2"><a href="#" class="text-blue-600 note-link" data-content="${note.content}">View</a></td>
+                    `;
+                    notesTable.appendChild(row);
+                });
+
+            // Click Handlers for Note Links
+            document.querySelectorAll('.note-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    alert(e.target.dataset.content);
+                });
+            });
+        }
+
+        // Initial Setup
+        populateFilters();
+        renderTable();
+    </script>
