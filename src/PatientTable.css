@@ -1,0 +1,279 @@
+/* PatientDetails.css - Unified theme matching main page */
+
+.patient-details-container {
+  min-height: 100vh;
+  background-color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Header - simplified without title */
+.header {
+  background-color: #fff;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.timestamp {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+/* Back button - now in header */
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: #6b7280;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.back-button:hover {
+  background-color: #4b5563;
+}
+
+/* Tabs - clean style matching main page */
+.tabs-container {
+  background-color: #fff;
+  margin: 0 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tabs {
+  display: flex;
+  gap: 0;
+}
+
+.tab {
+  padding: 12px 32px;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  color: #6b7280;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.tab:hover {
+  color: #4b5563;
+}
+
+.tab.active {
+  color: #fff;
+  background-color: #dc2626;
+  border-bottom-color: #dc2626;
+  border-radius: 6px 6px 0 0;
+}
+
+.tab-count {
+  margin-left: 4px;
+  color: inherit;
+  opacity: 0.7;
+}
+
+/* Content area */
+.content {
+  padding: 24px;
+  background-color: #fff;
+}
+
+/* Info grid layout */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Info cards - matching main page table style */
+.info-card {
+  background-color: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 24px;
+  transition: box-shadow 0.2s;
+}
+
+.info-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.card-header {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 20px 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+/* Info rows */
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.info-value {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 500;
+  text-align: right;
+}
+
+/* Number values - simple black text like main page */
+.info-value.number {
+  font-weight: 600;
+  color: #111827;
+}
+
+/* Small text for IDs */
+.info-value.small-text {
+  font-size: 12px;
+  word-break: break-all;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 60px;
+  color: #9ca3af;
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 16px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .tab {
+    white-space: nowrap;
+    padding: 12px 20px;
+  }
+  
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .timestamp {
+    font-size: 12px;
+  }
+}
+
+/* Loading state */
+.loading {
+  text-align: center;
+  padding: 60px;
+  color: #6b7280;
+}
+
+/* Match main page's clean aesthetic */
+* {
+  box-sizing: border-box;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* Ensure consistent spacing */
+.patient-details-container * {
+  margin: 0;
+  padding: 0;
+}
+
+/* Match the main page's subtle hover effects */
+button:focus {
+  outline: 2px solid #dc2626;
+  outline-offset: 2px;
+}
+
+/* Ensure text doesn't wrap awkwardly */
+.info-value {
+  max-width: 60%;
+  word-wrap: break-word;
+}
+
+/* Labs specific styles */
+.labs-container {
+  width: 100%;
+}
+
+.labs-tabs {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.lab-tab {
+  padding: 12px 24px;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: #6b7280;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.lab-tab:hover {
+  color: #4b5563;
+}
+
+.lab-tab.active {
+  color: #dc2626;
+  border-bottom-color: #dc2626;
+  font-weight: 600;
+}
+
+.labs-content {
+  padding: 24px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  min-height: 300px;
+}
