@@ -1,0 +1,816 @@
+/* PatientDetails.css - Complete unified theme */
+
+/* Reset and base styles */
+* {
+  box-sizing: border-box;
+}
+
+.patient-details-container {
+  min-height: 100vh;
+  background-color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Header - simplified without title */
+.header {
+  background-color: #fff;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* Back button - now in header */
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: #6b7280;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+  font-family: inherit;
+}
+
+.back-button:hover {
+  background-color: #4b5563;
+}
+
+/* Tabs container */
+.tabs-container {
+  background-color: #fff;
+  margin: 0 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tabs {
+  display: flex;
+  gap: 0;
+}
+
+.tab {
+  padding: 12px 32px;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  color: #6b7280;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s;
+  position: relative;
+  font-family: inherit;
+}
+
+.tab:hover {
+  color: #4b5563;
+}
+
+.tab.active {
+  color: #fff;
+  background-color: #dc2626;
+  border-bottom-color: #dc2626;
+  border-radius: 6px 6px 0 0;
+}
+
+.tab-count {
+  margin-left: 4px;
+  color: inherit;
+  opacity: 0.7;
+}
+
+/* Content area */
+.content {
+  padding: 24px;
+  background-color: #fff;
+}
+
+/* General info container - cards stacked vertically */
+.general-info-container {
+  max-width: 800px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Info cards */
+.info-card {
+  background-color: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 24px;
+  transition: box-shadow 0.2s;
+  width: 100%;
+}
+
+.info-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.card-header {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 20px 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+/* Info content wrapper */
+.info-content {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Info rows */
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.info-value {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 500;
+  text-align: right;
+  max-width: 60%;
+  word-wrap: break-word;
+}
+
+/* Number values */
+.info-value.number {
+  font-weight: 600;
+  color: #111827;
+}
+
+/* Small text for IDs */
+.info-value.small-text {
+  font-size: 12px;
+  word-break: break-all;
+}
+
+/* Labs specific styles */
+.labs-container {
+  width: 100%;
+}
+
+.labs-tabs {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.lab-tab {
+  padding: 12px 24px;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: #6b7280;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.lab-tab:hover {
+  color: #4b5563;
+}
+
+.lab-tab.active {
+  color: #dc2626;
+  border-bottom-color: #dc2626;
+  font-weight: 600;
+}
+
+.labs-content {
+  padding: 24px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  min-height: 300px;
+}
+
+.labs-content p {
+  margin: 0;
+  color: #6b7280;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 60px;
+  color: #9ca3af;
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 16px;
+}
+
+/* Empty state in tables */
+td.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Loading state */
+.loading {
+  text-align: center;
+  padding: 60px;
+  color: #6b7280;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .tab {
+    white-space: nowrap;
+    padding: 12px 20px;
+  }
+  
+  .header {
+    padding: 12px 16px;
+  }
+  
+  .tabs-container {
+    margin: 0 16px;
+  }
+  
+  .content {
+    padding: 16px;
+  }
+}
+
+/* Focus styles */
+button:focus {
+  outline: 2px solid #dc2626;
+  outline-offset: 2px;
+}
+
+/* Ensure all buttons inherit font */
+button {
+  font-family: inherit;
+}
+
+/* Lab table styles */
+.lab-table-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.lab-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.lab-table thead {
+  background-color: #f9fafb;
+}
+
+.lab-table th {
+  text-align: left;
+  padding: 12px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.lab-table td {
+  padding: 12px;
+  border-bottom: 1px solid #f3f4f6;
+  color: #111827;
+}
+
+.lab-table tbody tr:hover {
+  background-color: #f9fafb;
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  background-color: #10b981;
+  color: white;
+}
+
+/* Measurement Observations Specific Styles */
+.measurement-observations-container {
+  width: 100%;
+}
+
+.observation-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 16px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+}
+
+.controls-left {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.controls-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.items-per-page-select {
+  padding: 4px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background-color: white;
+  cursor: pointer;
+}
+
+/* Observations Table Enhanced */
+.observations-table tr {
+  transition: background-color 0.2s;
+}
+
+.observations-table tbody tr {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.observations-table tbody tr:hover {
+  background-color: #f3f4f6;
+}
+
+.observation-row td {
+  padding: 16px 12px;
+}
+
+.date-cell {
+  font-weight: 500;
+  color: #374151;
+}
+
+.type-cell {
+  color: #111827;
+  font-weight: 500;
+}
+
+.value-cell {
+  font-weight: 600;
+  color: #059669;
+}
+
+.unit-cell {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.category-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-block;
+}
+
+.category-badge.vital-signs {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.category-badge.laboratory {
+  background-color: #fce7f3;
+  color: #be185d;
+}
+
+.category-badge.survey {
+  background-color: #ede9fe;
+  color: #7c3aed;
+}
+
+.category-badge.social-history {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+/* Pagination Styles */
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 16px;
+}
+
+.pagination-btn {
+  padding: 8px 16px;
+  border: 1px solid #e5e7eb;
+  background-color: white;
+  color: #374151;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background-color: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-numbers {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.page-number {
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  background-color: transparent;
+  color: #6b7280;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.page-number:hover {
+  background-color: #f3f4f6;
+}
+
+.page-number.active {
+  background-color: #dc2626;
+  color: white;
+  border-color: #dc2626;
+}
+
+.page-dots {
+  padding: 0 4px;
+  color: #9ca3af;
+}
+
+/* Notes Container */
+.notes-container {
+  width: 100%;
+}
+
+/* Notes Tabs (Sub-tabs for DocumentReference and DiagnosticReport) */
+.notes-tabs {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.notes-tab {
+  padding: 12px 24px;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: #6b7280;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.notes-tab:hover {
+  color: #4b5563;
+}
+
+.notes-tab.active {
+  color: #dc2626;
+  border-bottom-color: #dc2626;
+  font-weight: 600;
+}
+
+/* Notes Content */
+.notes-content {
+  padding: 24px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  min-height: 400px;
+}
+
+/* Notes Table */
+.notes-table-container {
+  width: 100%;
+  overflow-x: auto;
+  background-color: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.notes-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.notes-table thead {
+  background-color: #f9fafb;
+}
+
+.notes-table th {
+  text-align: left;
+  padding: 16px 12px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.notes-table td {
+  padding: 16px 12px;
+  border-bottom: 1px solid #f3f4f6;
+  color: #111827;
+  vertical-align: top;
+}
+
+.notes-table tbody tr {
+  transition: background-color 0.2s;
+}
+
+.notes-table tbody tr:hover {
+  background-color: #f9fafb;
+}
+
+/* Note Row Cells */
+.note-row .date-cell {
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.note-row .author-cell {
+  font-weight: 500;
+  color: #111827;
+}
+
+.note-row .specialty-cell {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.note-row .department-cell {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.note-row .content-cell {
+  max-width: 300px;
+}
+
+.content-preview {
+  color: #374151;
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
+}
+
+.note-row .action-cell {
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* View Button */
+.view-btn {
+  padding: 6px 16px;
+  background-color: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+  font-family: inherit;
+}
+
+.view-btn:hover {
+  background-color: #b91c1c;
+}
+
+.view-btn:focus {
+  outline: 2px solid #dc2626;
+  outline-offset: 2px;
+}
+
+/* Type Badges for Notes */
+.type-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-block;
+}
+
+.type-badge.documentreference {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.type-badge.diagnosticreport {
+  background-color: #fce7f3;
+  color: #be185d;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background-color: white;
+  border-radius: 12px;
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 24px 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.2s, background-color 0.2s;
+  font-family: inherit;
+}
+
+.modal-close:hover {
+  color: #374151;
+  background-color: #f3f4f6;
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Note Details in Modal */
+.note-details-header {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.note-metadata {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.note-date {
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.provider-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.provider-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.provider-specialty {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.provider-department {
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+/* Note Content Display */
+.note-content-full {
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.note-content-full pre {
+  margin: 0;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #374151;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Responsive Notes */
+@media (max-width: 768px) {
+  .notes-table th,
+  .notes-table td {
+    padding: 12px 8px;
+  }
+  
+  .content-preview {
+    max-width: 200px;
+  }
+  
+  .modal-content {
+    margin: 10px;
+    max-height: 95vh;
+  }
+  
+  .modal-header,
+  .modal-body {
+    padding: 16px;
+  }
+  
+  .notes-tabs {
+    overflow-x: auto;
+  }
+  
+  .notes-tab {
+    white-space: nowrap;
+  }
+}
