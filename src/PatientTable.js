@@ -49,7 +49,7 @@ const PatientTable = ({ searchTerm, onPatientsLoaded }) => {
         console.log('Raw patient data loaded:', patientData.length, 'records');
         console.log('Sample record:', patientData[0]);
         
-        // Transform data to match your current UI structure
+        //  data to match  current UI structure
         const transformedData = patientData.map((patient, index) => ({
           id: `PT-${String(index + 1).padStart(3, '0')}`,
           originalId: patient.id,
@@ -60,7 +60,7 @@ const PatientTable = ({ searchTerm, onPatientsLoaded }) => {
           phone: patient.phone || `+1-555-${String(1230 + index).padStart(4, '0')}`,
           email: patient.email || `patient${index + 1}@example.com`,
           address: `${patient.city || ''}, ${patient.state || ''} ${patient.postal_code || patient.zip || ''}`.trim(),
-          status: patient.status || (index % 4 === 0 || index % 4 === 3 ? 'INACTIVE' : 'ACTIVE') // Fixed: deterministic status based on index
+          status: patient.status || (index % 4 === 0 || index % 4 === 3 ? 'INACTIVE' : 'ACTIVE') //  deterministic status based on index
         }));
         
         console.log('Transformed data:', transformedData.length, 'records');
@@ -195,7 +195,7 @@ const PatientTable = ({ searchTerm, onPatientsLoaded }) => {
         setPatients(sampleData);
         setFilteredPatients(sampleData);
         
-        // Notify parent component that data has been loaded
+     
         if (onPatientsLoaded) {
           onPatientsLoaded(sampleData);
         }
