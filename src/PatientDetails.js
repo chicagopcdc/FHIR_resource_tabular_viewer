@@ -21,7 +21,6 @@ const PatientDetails = ({ patientId }) => {
   const [documentReferences, setDocumentReferences] = useState([]);
   const [diagnosticReportNotes, setDiagnosticReportNotes] = useState([]);
 
-  // Load data from Excel file
   useEffect(() => {
     loadPatientData();
   }, [patientId]);
@@ -30,7 +29,7 @@ const PatientDetails = ({ patientId }) => {
     try {
       setLoading(true);
       
-      // Check if Excel file is available
+    
       if (!window.fs || !window.fs.readFile) {
         console.warn('Excel file reader not available, using mock data');
         // Use existing mock data as fallback
@@ -72,7 +71,7 @@ const PatientDetails = ({ patientId }) => {
           }
         };
         
-        // Mock observations
+      
         const mockObservations = Array.from({ length: 153 }, (_, i) => ({
           id: i + 1,
           type: ['Body Height', 'Body Weight', 'Heart rate', 'Blood pressure panel', 'Respiratory rate'][i % 5],
@@ -83,7 +82,7 @@ const PatientDetails = ({ patientId }) => {
           status: 'final'
         }));
 
-        // Mock lab observations
+      
         const mockLabObservations = [
           {
             id: 1,
@@ -159,7 +158,7 @@ const PatientDetails = ({ patientId }) => {
           }
         ];
 
-        // Mock diagnostic reports
+     
         const mockDiagnosticReports = [
           {
             id: 1,
@@ -211,7 +210,7 @@ const PatientDetails = ({ patientId }) => {
           }
         ];
         
-        // Mock DocumentReference notes
+    
         const mockDocumentReferences = [
           { 
             id: 1, 
@@ -251,7 +250,7 @@ const PatientDetails = ({ patientId }) => {
           },
         ];
 
-        // Mock DiagnosticReport notes
+      
         const mockDiagnosticReportNotes = [
           { 
             id: 2, 
@@ -279,7 +278,7 @@ const PatientDetails = ({ patientId }) => {
           }
         ];
         
-        setPatientData(mockPatientData); // FIXED: Changed from setPatients to setPatientData
+        setPatientData(mockPatientData); 
         setObservations(mockObservations);
         setLabObservations(mockLabObservations);
         setDiagnosticReports(mockDiagnosticReports);
@@ -476,7 +475,7 @@ const PatientDetails = ({ patientId }) => {
         fullContent: `Diagnostic Report\n\nID: ${report.id}\nType: ${report.code_display}\nDate: ${report.effectiveDateTime || report.issued}\nStatus: ${report.status}\n\nDetailed results not available in data source.`
       }));
 
-      // Build complete patient data object
+      //  complete patient data object
       const completePatientData = {
         personal: {
           givenName: currentPatient.given_name || 'Unknown',
@@ -499,8 +498,8 @@ const PatientDetails = ({ patientId }) => {
           procedures: patientProcedures.length,
           medications: patientMedicationRequests.length,
           immunizations: patientImmunizations.length,
-          careTeamMembers: 0, // Not available in this dataset
-          allergies: 0 // Not available in this dataset
+          careTeamMembers: 0, 
+          allergies: 0 
         },
         labs: {
           observations: processedLabObservations.length,
@@ -1078,7 +1077,7 @@ const PatientDetails = ({ patientId }) => {
 
   return (
     <div className="patient-details-container">
-      {/* Simple Header with just back button */}
+      {/*  Header with just back button */}
       <div className="header">
         <button className="back-button" onClick={handleBackClick}>
           <span>←</span> Back to Patient List
