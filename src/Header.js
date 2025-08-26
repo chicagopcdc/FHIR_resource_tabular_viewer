@@ -1,90 +1,229 @@
 import React, { useState } from 'react';
+import { Search, Download, RefreshCw, Settings, Filter } from 'lucide-react';
 
-const Header = ({ onSearchChange, onFilterChange, onSidebarToggle }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showQuickFilters, setShowQuickFilters] = useState(false);
+const Header = ({ 
+  onSearchChange, 
+  onSidebarToggle, 
+  onExport, 
+  onRefresh, 
+  onSettings,
+  searchTerm = ''
+}) => {
+  const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm);
 
   const handleSearch = (event) => {
     const term = event.target.value;
-    setSearchTerm(term);
-    onSearchChange(term);
+    setLocalSearchTerm(term);
+    onSearchChange && onSearchChange(term);
   };
 
-  const toggleQuickFilters = () => {
-    setShowQuickFilters(!showQuickFilters);
-  };
-
-  const applyQuickFilter = (filterType) => {
-    onFilterChange(filterType);
-    setShowQuickFilters(false);
-  };
-
-  const handleRefresh = () => {
-    window.location.reload();
+  const handleQuickFiltersClick = () => {
+    console.log('Quick Filters button clicked!');
+    onSidebarToggle && onSidebarToggle();
   };
 
   const handleExport = () => {
-    console.log('Export functionality');
+    onExport ? onExport() : console.log('Export functionality');
+  };
+
+  const handleRefresh = () => {
+    onRefresh ? onRefresh() : window.location.reload();
+  };
+
+  const handleSettings = () => {
+    onSettings ? onSettings() : console.log('Settings functionality');
   };
 
   return (
-    <div className="main-header">
-      <div className="header-top">
-        <div className="header-left">
-          <button 
-            className="sidebar-toggle-btn" 
-            onClick={() => {
-              console.log('Button clicked!');
-              onSidebarToggle();
-            }}
-          >
-            Quick Filters
-          </button>
-          <h1>FHIR Resource Viewer - Patient Search</h1>
-        </div>
-        <div className="header-right">
-          <p className="current-date">
-            Current Date and Time: {new Date().toLocaleString('en-US', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-              timeZoneName: 'short'
-            })}
-          </p>
+    <div style={{ 
+      background: 'white', 
+      boxShadow: '0 2px 4px rgba(0,0,0,0.1)', 
+      position: 'relative', 
+      zIndex: 100 
+    }}>
+      {/* Top Header */}
+      <div style={{ 
+        padding: '1rem 1.5rem', 
+        borderBottom: '1px solid #e0e0e0' 
+      }}>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center' 
+        }}>
+          <div>
+            <h1 style={{ 
+              fontSize: '1.5rem', 
+              fontWeight: '600', 
+              color: '#333', 
+              margin: 0 
+            }}>
+              FHIR Patient Viewer
+            </h1>
+            <p style={{ 
+              fontSize: '0.9rem', 
+              color: '#666', 
+              margin: '0.25rem 0 0 0' 
+            }}>
+              Healthcare Data Management System
+            </p>
+          </div>
+          <div style={{ 
+            fontSize: '0.9rem', 
+            color: '#666' 
+          }}>
+            Current Date and Time: Sunday, July 13, 2025 at 08:17 AM EDT
+          </div>
         </div>
       </div>
 
-      <div className="header-controls">
-        <div className="left-controls">
+      {/* Action Bar */}
+      <div style={{ 
+        padding: '1rem 1.5rem', 
+        borderBottom: '1px solid #e0e0e0' 
+      }}>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center' 
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '1rem' 
+          }}>
+            <button
+              onClick={handleQuickFiltersClick}
+              style={{
+                background: '#dc3545',
+                color: 'white',
+                border: 'none',
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: '500',
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              <Filter style={{ width: '16px', height: '16px' }} />
+              Quick Filters
+            </button>
+            <h2 style={{ 
+              fontSize: '1.25rem', 
+              fontWeight: '600', 
+              color: '#333', 
+              margin: 0 
+            }}>
+              FHIR Resource Viewer - Patient Search
+            </h2>
+          </div>
+          <div style={{ 
+            display: 'flex', 
+            gap: '0.5rem' 
+          }}>
+            <button
+              onClick={handleExport}
+              style={{
+                background: '#f8f9fa',
+                border: '1px solid #dee2e6',
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.9rem',
+                color: '#007bff'
+              }}
+            >
+              <Download style={{ width: '16px', height: '16px' }} />
+              <span>Export</span>
+            </button>
+            <button
+              onClick={handleRefresh}
+              style={{
+                background: '#f8f9fa',
+                border: '1px solid #dee2e6',
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.9rem',
+                color: '#007bff'
+              }}
+            >
+              <RefreshCw style={{ width: '16px', height: '16px' }} />
+              <span>Refresh</span>
+            </button>
+            <button
+              onClick={handleSettings}
+              style={{
+                background: '#f8f9fa',
+                border: '1px solid #dee2e6',
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                fontSize: '0.9rem',
+                color: '#6c757d'
+              }}
+            >
+              <Settings style={{ width: '16px', height: '16px' }} />
+              <span>Settings</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Search Bar */}
+      <div style={{ 
+        padding: '1rem 1.5rem', 
+        borderBottom: '1px solid #e0e0e0' 
+      }}>
+        <div style={{ 
+          position: 'relative', 
+          maxWidth: '300px' 
+        }}>
+          <Search style={{ 
+            position: 'absolute', 
+            left: '12px', 
+            top: '50%', 
+            transform: 'translateY(-50%)', 
+            width: '20px', 
+            height: '20px', 
+            color: '#999' 
+          }} />
           <input
             type="text"
-            placeholder="Search"
-            value={searchTerm}
+            value={localSearchTerm}
             onChange={handleSearch}
-            className="search-input"
+            placeholder="Search"
+            style={{
+              padding: '0.5rem 1rem 0.5rem 2.5rem',
+              border: '1px solid #dee2e6',
+              borderRadius: '4px',
+              width: '100%',
+              fontSize: '1rem',
+              outline: 'none'
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = '#007bff';
+              e.target.style.boxShadow = '0 0 0 2px rgba(0,123,255,0.25)';
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = '#dee2e6';
+              e.target.style.boxShadow = 'none';
+            }}
           />
         </div>
-
-        <div className="right-controls">
-          <button className="export-btn" onClick={handleExport}>📤 Export</button>
-          <button className="refresh-btn" onClick={handleRefresh}>🔄 Refresh</button>
-          <button className="settings-btn">⚙️ Settings</button>
-        </div>
       </div>
-
-      {showQuickFilters && (
-        <div className="quick-filters">
-          <button onClick={() => applyQuickFilter('all')}>All</button>
-          <button onClick={() => applyQuickFilter('active')}>Active</button>
-          <button onClick={() => applyQuickFilter('inactive')}>Inactive</button>
-          <button onClick={() => applyQuickFilter('male')}>Male</button>
-          <button onClick={() => applyQuickFilter('female')}>Female</button>
-        </div>
-      )}
     </div>
   );
 };

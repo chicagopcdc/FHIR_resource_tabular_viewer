@@ -1,279 +1,182 @@
-/* PatientDetails.css - Unified theme matching main page */
-
-.patient-details-container {
-  min-height: 100vh;
-  background-color: #ffffff;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
-
-/* Header - simplified without title */
-.header {
-  background-color: #fff;
-  padding: 16px 24px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.header h1 {
-  font-size: 20px;
-  font-weight: 600;
-  color: #333;
-  margin: 0;
-}
-
-.timestamp {
-  font-size: 14px;
-  color: #6b7280;
-}
-
-/* Back button - now in header */
-.back-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background-color: #6b7280;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.2s;
-}
-
-.back-button:hover {
-  background-color: #4b5563;
-}
-
-/* Tabs - clean style matching main page */
-.tabs-container {
-  background-color: #fff;
-  margin: 0 24px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.tabs {
-  display: flex;
-  gap: 0;
-}
-
-.tab {
-  padding: 12px 32px;
-  background-color: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 15px;
-  color: #6b7280;
-  border-bottom: 3px solid transparent;
-  transition: all 0.2s;
-  position: relative;
-}
-
-.tab:hover {
-  color: #4b5563;
-}
-
-.tab.active {
-  color: #fff;
-  background-color: #dc2626;
-  border-bottom-color: #dc2626;
-  border-radius: 6px 6px 0 0;
-}
-
-.tab-count {
-  margin-left: 4px;
-  color: inherit;
-  opacity: 0.7;
-}
-
-/* Content area */
-.content {
-  padding: 24px;
-  background-color: #fff;
-}
-
-/* Info grid layout */
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-/* Info cards - matching main page table style */
-.info-card {
-  background-color: #fff;
-  border: 1px solid #e5e7eb;
+/* === Patient Table Styles === */
+.patient-table-container {
+  background-color: white;
   border-radius: 8px;
-  padding: 24px;
-  transition: box-shadow 0.2s;
+  margin: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
-.info-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+.patient-table-header {
+  padding: 20px;
+  border-bottom: 1px solid #dee2e6;
 }
 
-.card-header {
-  font-size: 18px;
+.patient-table-header h2 {
+  margin: 0 0 8px 0;
+  font-size: 1.5rem;
   font-weight: 600;
-  color: #111827;
-  margin: 0 0 20px 0;
-  padding-bottom: 12px;
-  border-bottom: 2px solid #e5e7eb;
+  color: #212529;
 }
 
-/* Info rows */
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-.info-row:last-child {
-  border-bottom: none;
-}
-
-.info-label {
-  font-size: 14px;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.info-value {
-  font-size: 14px;
-  color: #111827;
-  font-weight: 500;
-  text-align: right;
-}
-
-/* Number values - simple black text like main page */
-.info-value.number {
-  font-weight: 600;
-  color: #111827;
-}
-
-/* Small text for IDs */
-.info-value.small-text {
-  font-size: 12px;
-  word-break: break-all;
+.patient-table-header p {
+  margin: 0;
+  color: #6c757d;
+  font-size: 0.95rem;
 }
 
 /* Empty state */
-.empty-state {
+.patient-table-empty {
+  padding: 60px 20px;
   text-align: center;
-  padding: 60px;
-  color: #9ca3af;
 }
 
-.empty-state-icon {
+.empty-emoji {
   font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 16px;
-}
-
-/* Responsive design */
-@media (max-width: 768px) {
-  .info-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .tabs {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  
-  .tab {
-    white-space: nowrap;
-    padding: 12px 20px;
-  }
-  
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  
-  .timestamp {
-    font-size: 12px;
-  }
+  margin-bottom: 15px;
+  opacity: 0.3;
 }
 
 /* Loading state */
-.loading {
+.patient-table-loading {
+  background-color: white;
+  border-radius: 8px;
+  padding: 40px;
   text-align: center;
-  padding: 60px;
-  color: #6b7280;
+  margin: 20px;
 }
-
-/* Match main page's clean aesthetic */
-* {
-  box-sizing: border-box;
+.patient-table-loading .loading-emoji {
+  font-size: 24px;
+  margin-bottom: 10px;
 }
-
-button {
-  font-family: inherit;
+.patient-table-loading h3 {
+  color: #495057;
+  margin-bottom: 5px;
 }
-
-/* Ensure consistent spacing */
-.patient-details-container * {
+.patient-table-loading p {
+  color: #6c757d;
   margin: 0;
-  padding: 0;
 }
 
-/* Match the main page's subtle hover effects */
-button:focus {
-  outline: 2px solid #dc2626;
-  outline-offset: 2px;
+/* Wrapper / table */
+.patient-table-wrapper {
+  overflow-x: auto;
 }
-
-/* Ensure text doesn't wrap awkwardly */
-.info-value {
-  max-width: 60%;
-  word-wrap: break-word;
-}
-
-/* Labs specific styles */
-.labs-container {
+.patient-table {
   width: 100%;
+  border-collapse: collapse;
 }
-
-.labs-tabs {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 24px;
-  border-bottom: 1px solid #e5e7eb;
+.patient-table th,
+.patient-table td {
+  padding: 12px;
+  text-align: left;
+  font-size: 0.9rem;
+  border-bottom: 1px solid #dee2e6;
+  color: #495057;
 }
-
-.lab-tab {
-  padding: 12px 24px;
-  background-color: transparent;
+.patient-table th {
+  font-weight: 600;
+  color: #495057;
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #dee2e6;
+}
+.patient-row:hover {
+  background-color: #f8f9fa;
+}
+.patient-link {
+  background: none;
   border: none;
+  padding: 0;
+  color: #007bff;
   cursor: pointer;
-  font-size: 14px;
-  color: #6b7280;
-  border-bottom: 2px solid transparent;
+  font-size: 0.9rem;
+  text-align: left;
+  text-decoration: none;
+}
+.patient-link-sub {
+  font-size: 0.75rem;
+  color: #6c757d;
+  margin-top: 2px;
+}
+.postal-muted {
+  color: #6c757d;
+  margin-left: 5px;
+}
+
+/* Status badge */
+.patient-status {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  display: inline-block;
+}
+.patient-status.active {
+  background-color: #d4edda;
+  color: #155724;
+}
+.patient-status.inactive {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+/* === Pagination Controls === */
+.pagination-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background-color: white;
+  border-top: 1px solid #dee2e6;
+  margin-top: -1px;
+}
+.pagination-info {
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+.pagination-buttons {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+.pagination-buttons .btn {
+  padding: 6px 12px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  background-color: white;
+  cursor: pointer;
+  font-size: 0.875rem;
   transition: all 0.2s;
+  color: #495057;
 }
-
-.lab-tab:hover {
-  color: #4b5563;
+.pagination-buttons .btn:disabled {
+  background-color: #f8f9fa;
+  color: #6c757d;
+  cursor: not-allowed;
 }
-
-.lab-tab.active {
-  color: #dc2626;
-  border-bottom-color: #dc2626;
+.pagination-buttons .btn.active {
+  background-color: #007bff;
+  border-color: #007bff;
+  color: white;
   font-weight: 600;
 }
-
-.labs-content {
-  padding: 24px;
-  background-color: #f9fafb;
-  border-radius: 8px;
-  min-height: 300px;
+.page-dots {
+  padding: 0 10px;
+  color: #6c757d;
+}
+.page-size-label {
+  font-size: 0.9rem;
+  color: #495057;
+  margin-left: 8px;
+}
+.page-size-select {
+  padding: 5px 8px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  color: #495057;
+}
+.page-size-suffix {
+  font-size: 0.9rem;
+  color: #495057;
+  margin-left: 4px;
 }
