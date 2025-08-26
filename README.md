@@ -155,15 +155,6 @@ Frontend will run at: **[http://localhost:5173](http://localhost:5173)**
 
 ---
 
-## 🛠️ Development Notes
-
-### Currently Implemented Filters
-
-* `_count`
-* `_getpagesoffset`
-* `active=true`
-* `_sort=-_lastUpdated`
-* `name`
 
 ### Filters Planned Soon
 
