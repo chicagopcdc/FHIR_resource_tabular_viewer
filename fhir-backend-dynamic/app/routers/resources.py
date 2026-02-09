@@ -12,14 +12,15 @@ import logging
 import re
 import asyncio
 from datetime import datetime, timedelta
+from app.services.cache_manager import get_patient_cache_manager
 
 router = APIRouter(prefix="/resources", tags=["resources"])
 logger = logging.getLogger(__name__)
 
-# Simple in-memory cache for patient pagination
-_patient_cache = {}
-_cache_expiry = {}
-CACHE_DURATION = timedelta(minutes=config.patient_cache_duration_minutes)
+# # Simple in-memory cache for patient pagination
+# _patient_cache = {}
+# _cache_expiry = {}
+# CACHE_DURATION = timedelta(minutes=config.patient_cache_duration_minutes)
 
 # Configuration cache
 _config_cache = {
@@ -30,100 +31,100 @@ _config_cache = {
 }
 CONFIG_CACHE_DURATION = timedelta(hours=config.config_cache_duration_hours)
 
-def _get_cache_key(params: Dict[str, str]) -> str:
-    """Generate cache key from parameters - FIXED: Include filter parameters"""
-    # Create a stable cache key that includes filter parameters
-    cache_params = []
+# def _get_cache_key(params: Dict[str, str]) -> str:
+#     """Generate cache key from parameters - FIXED: Include filter parameters"""
+#     # Create a stable cache key that includes filter parameters
+#     cache_params = []
     
-    # Always include pagination params
-    cache_params.append(f"count_{params.get('_count', '50')}")
-    cache_params.append(f"offset_{params.get('_getpagesoffset', '0')}")
+#     # Always include pagination params
+#     cache_params.append(f"count_{params.get('_count', '50')}")
+#     cache_params.append(f"offset_{params.get('_getpagesoffset', '0')}")
     
-    # Include search/filter parameters
-    filter_keys = ['name', 'gender', 'birthdate', '_id', '_has', 'telecom']
-    for key in sorted(filter_keys):
-        if key in params:
-            cache_params.append(f"{key}_{params[key]}")
+#     # Include search/filter parameters
+#     filter_keys = ['name', 'gender', 'birthdate', '_id', '_has', 'telecom']
+#     for key in sorted(filter_keys):
+#         if key in params:
+#             cache_params.append(f"{key}_{params[key]}")
     
-    # Include sort
-    if '_sort' in params:
-        cache_params.append(f"sort_{params['_sort']}")
+#     # Include sort
+#     if '_sort' in params:
+#         cache_params.append(f"sort_{params['_sort']}")
     
-    # Only cache if it's not too complex (max 6 parameters)
-    if len(cache_params) <= 6:
-        cache_key = "patients_" + "_".join(cache_params)
-        logger.debug(f"Generated cache key: {cache_key}")
-        return cache_key
+#     # Only cache if it's not too complex (max 6 parameters)
+#     if len(cache_params) <= 6:
+#         cache_key = "patients_" + "_".join(cache_params)
+#         logger.debug(f"Generated cache key: {cache_key}")
+#         return cache_key
     
-    logger.debug("Query too complex for caching")
-    return None
+#     logger.debug("Query too complex for caching")
+#     return None
 
-def _get_cached_response(cache_key: str) -> Optional[Dict]:
-    """Get cached response if valid"""
-    if cache_key and cache_key in _patient_cache:
-        if datetime.now() < _cache_expiry.get(cache_key, datetime.min):
-            logger.info(f"Cache hit for {cache_key}")
-            return _patient_cache[cache_key]
-        else:
-            # Cache expired, remove it
-            _patient_cache.pop(cache_key, None)
-            _cache_expiry.pop(cache_key, None)
-    return None
+# def _get_cached_response(cache_key: str) -> Optional[Dict]:
+#     """Get cached response if valid"""
+#     if cache_key and cache_key in _patient_cache:
+#         if datetime.now() < _cache_expiry.get(cache_key, datetime.min):
+#             logger.info(f"Cache hit for {cache_key}")
+#             return _patient_cache[cache_key]
+#         else:
+#             # Cache expired, remove it
+#             _patient_cache.pop(cache_key, None)
+#             _cache_expiry.pop(cache_key, None)
+#     return None
 
-def _cache_response(cache_key: str, response: Dict):
-    """Cache a response"""
-    if cache_key:
-        _patient_cache[cache_key] = response
-        _cache_expiry[cache_key] = datetime.now() + CACHE_DURATION
-        logger.info(f"Cached response for {cache_key}")
+# def _cache_response(cache_key: str, response: Dict):
+#     """Cache a response"""
+#     if cache_key:
+#         _patient_cache[cache_key] = response
+#         _cache_expiry[cache_key] = datetime.now() + CACHE_DURATION
+#         logger.info(f"Cached response for {cache_key}")
         
-        # Clean up old cache entries (keep max 10 entries)
-        if len(_patient_cache) > 10:
-            oldest_key = min(_cache_expiry.keys(), key=lambda k: _cache_expiry[k])
-            _patient_cache.pop(oldest_key, None)
-            _cache_expiry.pop(oldest_key, None)
+#         # Clean up old cache entries (keep max 10 entries)
+#         if len(_patient_cache) > 10:
+#             oldest_key = min(_cache_expiry.keys(), key=lambda k: _cache_expiry[k])
+#             _patient_cache.pop(oldest_key, None)
+#             _cache_expiry.pop(oldest_key, None)
 
-async def _prefetch_next_page(current_params: Dict[str, str], pagination: Dict):
-    """Background prefetch of the next page"""
-    try:
-        if not pagination.get("has_next"):
-            return
+# async def _prefetch_next_page(current_params: Dict[str, str], pagination: Dict):
+#     """Background prefetch of the next page"""
+#     try:
+#         if not pagination.get("has_next"):
+#             return
             
-        # Calculate next page parameters
-        count = int(current_params.get("_count", "50"))
-        current_offset = int(current_params.get("_getpagesoffset", "0"))
-        next_offset = current_offset + count
+#         # Calculate next page parameters
+#         count = int(current_params.get("_count", "50"))
+#         current_offset = int(current_params.get("_getpagesoffset", "0"))
+#         next_offset = current_offset + count
         
-        next_params = current_params.copy()
-        next_params["_getpagesoffset"] = str(next_offset)
+#         next_params = current_params.copy()
+#         next_params["_getpagesoffset"] = str(next_offset)
         
-        next_cache_key = _get_cache_key(next_params)
-        if next_cache_key and not _get_cached_response(next_cache_key):
-            logger.info(f"Background prefetching next page: offset {next_offset}")
+#         next_cache_key = _get_cache_key(next_params)
+#         if next_cache_key and not _get_cached_response(next_cache_key):
+#             logger.info(f"Background prefetching next page: offset {next_offset}")
             
-            # Fetch next page in background
-            base_url = fhir.base().rstrip('/') + '/'
-            url = base_url + "Patient"
-            bundle = await fhir.fetch_bundle_with_deferred_handling(url, next_params)
+#             # Fetch next page in background
+#             base_url = fhir.base().rstrip('/') + '/'
+#             url = base_url + "Patient"
+#             bundle = await fhir.fetch_bundle_with_deferred_handling(url, next_params)
             
-            if bundle and not isinstance(bundle, dict) or bundle.get("resourceType") != "OperationOutcome":
-                # Process and cache the response
-                all_resources = fhir.entries(bundle)
-                patients = [r for r in all_resources if r.get("resourceType") == "Patient"]
-                next_pagination = fhir.normalize_pagination(bundle)
+#             if bundle and not isinstance(bundle, dict) or bundle.get("resourceType") != "OperationOutcome":
+#                 # Process and cache the response
+#                 all_resources = fhir.entries(bundle)
+#                 patients = [r for r in all_resources if r.get("resourceType") == "Patient"]
+#                 next_pagination = fhir.normalize_pagination(bundle)
                 
-                next_response = {
-                    "success": True,
-                    "resource_type": "Patient", 
-                    "data": patients,
-                    "pagination": next_pagination,
-                    "prioritized": False
-                }
-                _cache_response(next_cache_key, next_response)
-                logger.info(f"Successfully prefetched and cached next page")
+#                 next_response = {
+#                     "success": True,
+#                     "resource_type": "Patient", 
+#                     "data": patients,
+#                     "pagination": next_pagination,
+#                     "prioritized": False
+#                 }
+#                 _cache_response(next_cache_key, next_response)
+#                 logger.info(f"Successfully prefetched and cached next page")
                 
-    except Exception as e:
-        logger.debug(f"Prefetch failed (non-critical): {e}")
+#     except Exception as e:
+#         logger.debug(f"Prefetch failed (non-critical): {e}")
 
 # ----------------------------------------------------------------------
 # Helpers
@@ -529,11 +530,8 @@ async def get_backend_status():
         fhir_details = server_info or {"error": "Failed to connect to FHIR server"}
         
         # Cache status
-        cache_status = {
-            "patient_cache_size": len(_patient_cache),
-            "cache_entries": list(_patient_cache.keys()),
-            "cache_duration_minutes": int(CACHE_DURATION.total_seconds() / 60)
-        }
+        cache_mgr = get_patient_cache_manager()
+        cache_status = cache_mgr.get_stats()        
         
         return {
             "success": True,
@@ -566,9 +564,8 @@ async def get_backend_status():
 async def clear_cache():
     """Clear the patient cache"""
     try:
-        cleared_count = len(_patient_cache)
-        _patient_cache.clear()
-        _cache_expiry.clear()
+        cache_mgr = get_patient_cache_manager()
+        cleared_count = await cache_mgr.clear()
         
         return {
             "success": True,
@@ -587,15 +584,9 @@ async def get_startup_status_detailed():
         startup_info = get_startup_status()
         
         # Add additional runtime information
+        cache_mgr = get_patient_cache_manager()
         runtime_info = {
-            "cache_stats": {
-                "patient_cache_size": len(_patient_cache),
-                "config_cache_age_hours": (
-                    (datetime.now() - _config_cache.get("cached_at", datetime.min)).total_seconds() / 3600
-                    if _config_cache.get("cached_at") else None
-                ),
-                "cache_entries": list(_patient_cache.keys())
-            },
+            "cache_stats": cache_mgr.get_stats(),
             "configuration": {
                 "patient_cache_duration_minutes": config.patient_cache_duration_minutes,
                 "config_cache_duration_hours": config.config_cache_duration_hours,
@@ -2182,11 +2173,14 @@ async def search_resources(
 
         # Check cache AFTER parameters are finalized (including sort)
         cache_key = None
+        cached_response = None
         if resource_type.lower() == "patient":
-            cache_key = _get_cache_key(params)
-            cached_response = _get_cached_response(cache_key)
+            cache_mgr = get_patient_cache_manager()
+            cache_key = cache_mgr.generate_cache_key(params)
             if cached_response:
-                return cached_response
+                cached_response = await cache_mgr.get(cache_key)
+                if cached_response:
+                    return cached_response
 
         logger.info(f"Searching {resource_type} with params: {params}")
 
@@ -2253,11 +2247,22 @@ async def search_resources(
             response["prioritized"] = False
             
         # Cache patient responses
-        if cache_key and resource_type.lower() == "patient":
-            _cache_response(cache_key, response)
-            
-            # Background prefetch next page
-            asyncio.create_task(_prefetch_next_page(params, response.get("pagination", {})))
+        if resource_type.lower() == "patient":
+            cache_mgr = get_patient_cache_manager()
+            if cache_key:
+                await cache_mgr.set(cache_key, response)
+        
+                # Background prefetch next page
+                async def fetch_next_page(next_params):
+                    base_url = fhir.base().rstrip('/') + '/'
+                    url = base_url + "Patient"
+                    return await fhir.fetch_bundle_with_deferred_handling(url, next_params)
+        
+                asyncio.create_task(cache_mgr.prefetch_next_page(
+                    params, 
+                    response.get("pagination", {}),
+                    fetch_next_page
+                ))
             
         return response
 
