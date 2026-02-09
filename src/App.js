@@ -688,9 +688,15 @@ const MainPage = () => {
       const values = headers.map((header) => {
         const value = row[header];
         if (value === null || value === undefined) return "";
-        return typeof value === "string" && value.includes(",")
-          ? `"${value}"`
-          : value;
+        // Convert to string for consistent handling
+        const strValue = String(value);
+        // Check if value needs quoting (contains comma, double quote, or newline)
+        const needsQuoting = strValue.includes(",") || strValue.includes('"') || strValue.includes("\n") || strValue.includes("\r");
+        if (needsQuoting) {
+          // Escape double quotes by doubling them, then wrap in quotes (RFC 4180)
+          return `"${strValue.replace(/"/g, '""')}"`;
+        }
+        return strValue;
       });
       csvRows.push(values.join(","));
     });
