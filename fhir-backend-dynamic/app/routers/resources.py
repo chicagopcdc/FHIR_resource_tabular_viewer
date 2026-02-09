@@ -339,19 +339,29 @@ def process_search_parameters(query_params: Dict[str, str], resource_type: str) 
                 processed["_has"] = f"Condition:patient:code={condition_code}"
         elif key == "age_min" and resource_type.lower() == "patient":
             # Handle minimum age filtering - convert to FHIR birthdate parameter
+            # Use list to accumulate multiple birthdate constraints
             if value and value.strip() and value.isdigit():
                 from datetime import datetime
                 current_year = datetime.now().year
                 birth_year = current_year - int(value)
-                processed["birthdate"] = f"le{birth_year}-12-31"
+                if "birthdate" not in processed:
+                    processed["birthdate"] = []
+                elif isinstance(processed["birthdate"], str):
+                    processed["birthdate"] = [processed["birthdate"]]
+                processed["birthdate"].append(f"le{birth_year}-12-31")
                 logger.info(f"Age filter: min age {value} -> birthdate le{birth_year}-12-31")
         elif key == "age_max" and resource_type.lower() == "patient":
             # Handle maximum age filtering - convert to FHIR birthdate parameter
+            # Use list to accumulate multiple birthdate constraints
             if value and value.strip() and value.isdigit():
                 from datetime import datetime
                 current_year = datetime.now().year
                 birth_year = current_year - int(value)
-                processed["birthdate"] = f"ge{birth_year}-01-01"
+                if "birthdate" not in processed:
+                    processed["birthdate"] = []
+                elif isinstance(processed["birthdate"], str):
+                    processed["birthdate"] = [processed["birthdate"]]
+                processed["birthdate"].append(f"ge{birth_year}-01-01")
                 logger.info(f"Age filter: max age {value} -> birthdate ge{birth_year}-01-01")
         elif key == "gender" and resource_type.lower() == "patient":
             # Handle gender filtering - direct FHIR parameter
@@ -709,22 +719,26 @@ async def search_patients_by_condition(
         }
         
         # Add age filtering via birthdate
+        # Use list for multiple birthdate constraints - FHIR requires separate query parameters
         if age_min is not None or age_max is not None:
             current_year = datetime.now().year
+            birthdate_constraints = []
             
-            if age_min is not None and age_max is not None:
-                # Age range
+            if age_max is not None:
+                # Maximum age means minimum birth year (born after this date)
                 min_birth_year = current_year - age_max
+                birthdate_constraints.append(f"ge{min_birth_year}-01-01")
+            
+            if age_min is not None:
+                # Minimum age means maximum birth year (born before this date)
                 max_birth_year = current_year - age_min
-                params["birthdate"] = f"ge{min_birth_year}-01-01&birthdate=le{max_birth_year}-12-31"
-            elif age_min is not None:
-                # Only minimum age
-                max_birth_year = current_year - age_min
-                params["birthdate"] = f"le{max_birth_year}-12-31"
-            elif age_max is not None:
-                # Only maximum age
-                min_birth_year = current_year - age_max
-                params["birthdate"] = f"ge{min_birth_year}-01-01"
+                birthdate_constraints.append(f"le{max_birth_year}-12-31")
+            
+            # Store as list for proper multi-value parameter handling
+            if len(birthdate_constraints) == 1:
+                params["birthdate"] = birthdate_constraints[0]
+            else:
+                params["birthdate"] = birthdate_constraints
         
         # Add gender filtering
         if gender:
