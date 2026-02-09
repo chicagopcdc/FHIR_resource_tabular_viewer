@@ -131,7 +131,29 @@ const DynamicResourceTab = ({
         return value.code;
       }
       
-      // Handle nested values
+      // Handle quantity objects with units (must check BEFORE generic .value extraction)
+      if (value.value !== undefined && value.unit) {
+        return <span>
+          <strong>{value.value}</strong> {value.unit}
+        </span>;
+      }
+      
+      // Handle quantity with comparator (e.g., "< 5 mg/dL")
+      if (value.value !== undefined && value.comparator) {
+        const unit = value.unit || value.code || '';
+        return <span>
+          <strong>{value.comparator} {value.value}</strong>{unit ? ` ${unit}` : ''}
+        </span>;
+      }
+      
+      // Handle quantity without unit but with code (e.g., "120 mm[Hg]")
+      if (value.value !== undefined && value.code && !value.unit) {
+        return <span>
+          <strong>{value.value}</strong> {value.code}
+        </span>;
+      }
+      
+      // Handle nested values (generic .value extraction - must come AFTER quantity checks)
       if (value.value !== undefined) {
         return renderFhirValue(value.value, fieldKey);
       }
@@ -144,13 +166,6 @@ const DynamicResourceTab = ({
           color: '#0066cc'
         }}>
           {value.reference}
-        </span>;
-      }
-      
-      // Handle quantity objects with units
-      if (value.value !== undefined && value.unit) {
-        return <span>
-          <strong>{value.value}</strong> {value.unit}
         </span>;
       }
       
