@@ -1,25 +1,17 @@
-FROM node:18
+FROM node:18-alpine AS build
 
-# Set the working directory
+# Build stage
 WORKDIR /app
-
-# Copy package.json and package-lock.json
 COPY package*.json ./
-
-# Install dependencies
-RUN npm install
-
-# Copy the rest of the application code
+RUN npm ci
 COPY . .
-
-# Build the application
 RUN npm run build
 
-# Install serve to serve the build folder
+FROM node:18-alpine
+WORKDIR /app
+
+# Serve the production build using 'serve'
 RUN npm install -g serve
-
-# Expose the port the app runs on
+COPY --from=build /app/build ./build
 EXPOSE 3000
-
-# Command to run the application
-CMD ["serve", "-s", "build"]
+CMD ["serve", "-s", "build", "-l", "3000"]
