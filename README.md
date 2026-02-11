@@ -354,6 +354,48 @@ npm start
 npm run build
 ```
 
+## Docker Setup
+
+This repository includes a `docker-compose.yml` that builds and runs the frontend and backend together (recommended).
+
+Prerequisites: `docker` and `docker-compose` installed.
+
+Using docker-compose (recommended):
+
+```bash
+# build images and start services in background
+docker-compose up -d --build
+
+# view logs
+docker-compose logs -f
+
+# stop and remove containers
+docker-compose down
+```
+
+Ports exposed by the compose file:
+- Frontend: http://localhost:3000
+- Backend (FastAPI): http://localhost:8000
+
+Notes:
+- The compose file sets `REACT_APP_API_BASE_URL` for the frontend to `http://backend:8000` so the frontend talks to the backend service by name inside the compose network.
+- `config.yaml` from the repository is mounted into the backend container. Edit or override as needed.
+
+Manual build (alternative):
+
+```bash
+# Build and run backend
+docker build -t fhir-backend -f fhir-backend-dynamic/Dockerfile fhir-backend-dynamic
+docker run -d --name fhir-backend -p 8000:8000 -v $(pwd)/config.yaml:/app/config.yaml:ro fhir-backend
+
+# Build and run frontend
+docker build -t fhir-frontend .
+docker run -d --name fhir-frontend -p 3000:3000 -e REACT_APP_API_BASE_URL=http://localhost:8000 fhir-frontend
+```
+
+If you want to enable FastAPI docs in the backend while running in Docker, set the environment variable `ENABLE_DOCS=1` (the compose file already sets this).
+
+
 ## Usage Guide
 
 ### Basic Patient Search
