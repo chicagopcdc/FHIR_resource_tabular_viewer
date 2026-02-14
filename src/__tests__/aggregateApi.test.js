@@ -4,6 +4,8 @@
 import * as aggregateApi from '../services/aggregateApi';
 import { CONFIG } from '../config';
 
+const API_BASE_URL = CONFIG.api.baseUrl;
+
 // Mock fetch for testing
 global.fetch = jest.fn();
 
@@ -11,7 +13,7 @@ global.fetch = jest.fn();
 jest.mock('../config', () => ({
   CONFIG: {
     api: {
-      baseUrl: 'http://localhost:8000',
+      baseUrl: `${API_BASE_URL}`,
       timeout: 30000,
       maxRetries: 2
     },
@@ -61,7 +63,7 @@ describe('Aggregate API Service', () => {
       );
 
       expect(fetch).toHaveBeenCalledWith(
-        'http://localhost:8000/api/aggregate/Patient',
+        `${API_BASE_URL}/api/aggregate/Patient`,
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -127,7 +129,7 @@ describe('Aggregate API Service', () => {
       );
 
       expect(fetch).toHaveBeenCalledWith(
-        'http://localhost:8000/api/aggregate/dataset-123/slice?offset=20&limit=10&user_session=test-session',
+        `${API_BASE_URL}/api/aggregate/dataset-123/slice?offset=20&limit=10&user_session=test-session`,
         expect.objectContaining({
           headers: expect.objectContaining({
             'Accept': 'application/json; charset=utf-8'
@@ -280,7 +282,7 @@ describe('Aggregate API Service', () => {
       const result = await aggregateApi.getDatasetProgress('dataset-123');
 
       expect(fetch).toHaveBeenCalledWith(
-        'http://localhost:8000/api/aggregate/dataset-123/progress',
+        `${API_BASE_URL}/api/aggregate/dataset-123/progress`,
         expect.any(Object)
       );
 
@@ -304,7 +306,7 @@ describe('Aggregate API Service', () => {
       const result = await aggregateApi.deleteDataset('dataset-123', 'test-session');
 
       expect(fetch).toHaveBeenCalledWith(
-        'http://localhost:8000/api/aggregate/dataset-123?user_session=test-session',
+        `${API_BASE_URL}/api/aggregate/dataset-123?user_session=test-session`,
         expect.objectContaining({
           method: 'DELETE'
         })
