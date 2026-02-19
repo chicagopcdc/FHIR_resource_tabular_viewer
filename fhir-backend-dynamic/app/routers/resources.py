@@ -12,118 +12,20 @@ import logging
 import re
 import asyncio
 from datetime import datetime, timedelta
+from app.services.cache_manager import get_patient_cache_manager
+from app.services.patient_scoring import (
+    calculate_patient_data_score,
+    sort_patients_by_data_richness,
+    filter_patients_by_resources
+)
+from app.services.search_params import (
+    process_search_parameters,
+    get_valid_sort_for_resource,
+    is_uuid_format
+)
 
 router = APIRouter(prefix="/resources", tags=["resources"])
 logger = logging.getLogger(__name__)
-
-# Simple in-memory cache for patient pagination
-_patient_cache = {}
-_cache_expiry = {}
-CACHE_DURATION = timedelta(minutes=config.patient_cache_duration_minutes)
-
-# Configuration cache
-_config_cache = {
-    "fhir_version": None,
-    "server_info": None,
-    "supported_resources": None,
-    "cached_at": None
-}
-CONFIG_CACHE_DURATION = timedelta(hours=config.config_cache_duration_hours)
-
-def _get_cache_key(params: Dict[str, str]) -> str:
-    """Generate cache key from parameters - FIXED: Include filter parameters"""
-    # Create a stable cache key that includes filter parameters
-    cache_params = []
-    
-    # Always include pagination params
-    cache_params.append(f"count_{params.get('_count', '50')}")
-    cache_params.append(f"offset_{params.get('_getpagesoffset', '0')}")
-    
-    # Include search/filter parameters
-    filter_keys = ['name', 'gender', 'birthdate', '_id', '_has', 'telecom']
-    for key in sorted(filter_keys):
-        if key in params:
-            cache_params.append(f"{key}_{params[key]}")
-    
-    # Include sort
-    if '_sort' in params:
-        cache_params.append(f"sort_{params['_sort']}")
-    
-    # Only cache if it's not too complex (max 6 parameters)
-    if len(cache_params) <= 6:
-        cache_key = "patients_" + "_".join(cache_params)
-        logger.debug(f"Generated cache key: {cache_key}")
-        return cache_key
-    
-    logger.debug("Query too complex for caching")
-    return None
-
-def _get_cached_response(cache_key: str) -> Optional[Dict]:
-    """Get cached response if valid"""
-    if cache_key and cache_key in _patient_cache:
-        if datetime.now() < _cache_expiry.get(cache_key, datetime.min):
-            logger.info(f"Cache hit for {cache_key}")
-            return _patient_cache[cache_key]
-        else:
-            # Cache expired, remove it
-            _patient_cache.pop(cache_key, None)
-            _cache_expiry.pop(cache_key, None)
-    return None
-
-def _cache_response(cache_key: str, response: Dict):
-    """Cache a response"""
-    if cache_key:
-        _patient_cache[cache_key] = response
-        _cache_expiry[cache_key] = datetime.now() + CACHE_DURATION
-        logger.info(f"Cached response for {cache_key}")
-        
-        # Clean up old cache entries (keep max 10 entries)
-        if len(_patient_cache) > 10:
-            oldest_key = min(_cache_expiry.keys(), key=lambda k: _cache_expiry[k])
-            _patient_cache.pop(oldest_key, None)
-            _cache_expiry.pop(oldest_key, None)
-
-async def _prefetch_next_page(current_params: Dict[str, str], pagination: Dict):
-    """Background prefetch of the next page"""
-    try:
-        if not pagination.get("has_next"):
-            return
-            
-        # Calculate next page parameters
-        count = int(current_params.get("_count", "50"))
-        current_offset = int(current_params.get("_getpagesoffset", "0"))
-        next_offset = current_offset + count
-        
-        next_params = current_params.copy()
-        next_params["_getpagesoffset"] = str(next_offset)
-        
-        next_cache_key = _get_cache_key(next_params)
-        if next_cache_key and not _get_cached_response(next_cache_key):
-            logger.info(f"Background prefetching next page: offset {next_offset}")
-            
-            # Fetch next page in background
-            base_url = fhir.base().rstrip('/') + '/'
-            url = base_url + "Patient"
-            bundle = await fhir.fetch_bundle_with_deferred_handling(url, next_params)
-            
-            if bundle and not isinstance(bundle, dict) or bundle.get("resourceType") != "OperationOutcome":
-                # Process and cache the response
-                all_resources = fhir.entries(bundle)
-                patients = [r for r in all_resources if r.get("resourceType") == "Patient"]
-                next_pagination = fhir.normalize_pagination(bundle)
-                
-                next_response = {
-                    "success": True,
-                    "resource_type": "Patient", 
-                    "data": patients,
-                    "pagination": next_pagination,
-                    "prioritized": False
-                }
-                _cache_response(next_cache_key, next_response)
-                logger.info(f"Successfully prefetched and cached next page")
-                
-    except Exception as e:
-        logger.debug(f"Prefetch failed (non-critical): {e}")
 
 # ----------------------------------------------------------------------
 # Helpers
@@ -163,280 +65,6 @@ def _separate_patient_fields(patient: Dict) -> Dict:
 
     return {'fixed': fixed, 'dynamic': dynamic, 'all': patient}
 
-def is_uuid_format(patient_id: str) -> bool:
-    """Check if ID follows UUID format pattern (case-insensitive)"""
-    if not patient_id:
-        return False
-    uuid_pattern = r'^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$'
-    return bool(re.match(uuid_pattern, patient_id))
-
-async def calculate_patient_data_score(patient_id: str) -> int:
-    """Calculate data richness score for a patient by checking just the top resource types quickly"""
-    score = 0
-    base_url = fhir.base().rstrip('/') + '/'
-    
-    # Only check the most important resource types for speed
-    resource_checks = [
-        ('Observation', 5),  # High value - clinical measurements
-        ('Condition', 4),    # High value - diagnoses
-    ]
-    
-    for resource_type, points in resource_checks:
-        try:
-            # Quick check - just get count, don't fetch all data
-            url = f"{base_url}{resource_type}"
-            params = {"subject": f"Patient/{patient_id}", "_count": "0", "_summary": "count"}
-            result = await fhir.fetch_bundle_with_deferred_handling(url, params)
-            
-            if isinstance(result, dict) and result.get("total", 0) > 0:
-                resource_count = result.get("total", 0)
-                # Simple scoring - having any resources gives points
-                score += points
-                if resource_count > 5:
-                    score += 1  # Small bonus for having many resources
-                
-        except Exception as e:
-            # Don't let individual resource checks break the whole scoring
-            logger.debug(f"Error checking {resource_type} for patient {patient_id}: {e}")
-            continue
-    
-    return score
-
-async def sort_patients_by_data_richness(patients: List[Dict]) -> List[Dict]:
-    """Sort patients by data richness score (highest first)"""
-    if not patients:
-        return patients
-    
-    # Limit number of patients to score to avoid timeouts (score max 20 patients)
-    max_to_score = min(len(patients), 20)
-    patients_to_score = patients[:max_to_score]
-    remaining_patients = patients[max_to_score:] if len(patients) > max_to_score else []
-    
-    logger.info(f"Calculating data scores for {len(patients_to_score)} patients (limiting to first {max_to_score})...")
-    
-    # Calculate scores for limited set of patients
-    patient_scores = []
-    for patient in patients_to_score:
-        patient_id = patient.get('id')
-        if patient_id:
-            try:
-                score = await calculate_patient_data_score(patient_id)
-                patient_scores.append((patient, score))
-                logger.debug(f"Patient {patient_id}: data score {score}")
-            except Exception as e:
-                logger.warning(f"Error scoring patient {patient_id}: {e}")
-                patient_scores.append((patient, 0))  # Default to 0 if scoring fails
-        else:
-            patient_scores.append((patient, 0))
-    
-    # Sort scored patients by score (highest first), then by ID for consistent ordering
-    patient_scores.sort(key=lambda x: (-x[1], x[0].get('id', '')))
-    
-    sorted_patients = [patient for patient, score in patient_scores]
-    
-    # Add remaining unscored patients at the end
-    if remaining_patients:
-        sorted_patients.extend(remaining_patients)
-    
-    # Log the top few for debugging
-    top_scores = [(p.get('id'), s) for p, s in patient_scores[:5]]
-    logger.info(f"Top data-rich patients: {top_scores}")
-    
-    return sorted_patients
-
-def _filter_patients_by_resources(patients: List[Dict], all_resources: List[Dict], query_params: Dict[str, str]) -> List[Dict]:
-    """Filter patients to only include those that have the specified resources"""
-    data_availability = query_params.get("data_availability", "")
-    if not data_availability.strip():
-        return patients
-    
-    # Parse the required resource types
-    required_resources = []
-    resource_filters = [r.strip() for r in data_availability.split(",") if r.strip()]
-    for resource_filter in resource_filters:
-        if resource_filter.startswith("has_"):
-            required_resources.append(resource_filter[4:])  # Remove "has_" prefix
-    
-    if not required_resources:
-        return patients
-    
-    # Create a mapping of patient ID to their resources
-    patient_resources = {}
-    for patient in patients:
-        patient_id = patient.get("id")
-        if patient_id:
-            patient_resources[patient_id] = set()
-    
-    # Go through all resources and map them to patients
-    for resource in all_resources:
-        if resource.get("resourceType") == "Patient":
-            continue
-            
-        resource_type = resource.get("resourceType")
-        if not resource_type:
-            continue
-            
-        # Extract patient reference
-        patient_id = None
-        for field in ["subject", "patient"]:
-            ref = resource.get(field, {})
-            if isinstance(ref, dict) and ref.get("reference"):
-                ref_str = ref["reference"]
-                if ref_str.startswith("Patient/"):
-                    patient_id = ref_str.replace("Patient/", "")
-                    break
-                elif "/" not in ref_str:  # Assume bare ID
-                    patient_id = ref_str
-                    break
-        
-        # Add resource type to patient's set
-        if patient_id and patient_id in patient_resources:
-            patient_resources[patient_id].add(resource_type)
-    
-    # Filter patients to only those with ALL required resources
-    filtered_patients = []
-    for patient in patients:
-        patient_id = patient.get("id")
-        if patient_id and patient_id in patient_resources:
-            patient_resource_types = patient_resources[patient_id]
-            # Check if patient has ALL required resource types
-            if all(req_resource in patient_resource_types for req_resource in required_resources):
-                filtered_patients.append(patient)
-    
-    logger.info(f"Filtered {len(patients)} patients to {len(filtered_patients)} with required resources: {required_resources}")
-    return filtered_patients
-
-def process_search_parameters(query_params: Dict[str, str], resource_type: str) -> Dict[str, str]:
-    """Process search parameters from frontend (search box, etc.) - FIXED: Better filter handling"""
-    processed: Dict[str, str] = {}
-    revinclude_resources = []
-    
-    logger.info(f"Processing search parameters: {query_params}")
-    
-    for key, value in query_params.items():
-        if key in ("_count", "_getpagesoffset", "_getpages", "top_n", "fetch_all"):
-            continue
-
-        if key in ("search", "q", "query"):
-            if value and value.strip():
-                search_term = value.strip()
-                if resource_type.lower() == "patient":
-                    if is_uuid_format(search_term):
-                        processed["_id"] = search_term
-                    elif search_term.isdigit() or (len(search_term) > 6 and " " not in search_term):
-                        # If it's all digits (like "1200") or a long string without spaces, treat as ID
-                        processed["_id"] = search_term
-                    elif "@" in search_term:
-                        processed["telecom"] = search_term
-                    else:
-                        processed["name"] = search_term
-                else:
-                    processed["_text"] = search_term
-        elif key == "condition_code" and resource_type.lower() == "patient":
-            # Handle condition code filtering for patients using _has parameter
-            if value and value.strip():
-                condition_code = value.strip()
-                processed["_has"] = f"Condition:patient:code={condition_code}"
-        elif key == "age_min" and resource_type.lower() == "patient":
-            # Handle minimum age filtering - convert to FHIR birthdate parameter
-            if value and value.strip() and value.isdigit():
-                from datetime import datetime
-                current_year = datetime.now().year
-                birth_year = current_year - int(value)
-                processed["birthdate"] = f"le{birth_year}-12-31"
-                logger.info(f"Age filter: min age {value} -> birthdate le{birth_year}-12-31")
-        elif key == "age_max" and resource_type.lower() == "patient":
-            # Handle maximum age filtering - convert to FHIR birthdate parameter
-            if value and value.strip() and value.isdigit():
-                from datetime import datetime
-                current_year = datetime.now().year
-                birth_year = current_year - int(value)
-                processed["birthdate"] = f"ge{birth_year}-01-01"
-                logger.info(f"Age filter: max age {value} -> birthdate ge{birth_year}-01-01")
-        elif key == "gender" and resource_type.lower() == "patient":
-            # Handle gender filtering - direct FHIR parameter
-            if value:
-                if isinstance(value, list):
-                    # Handle array of genders from frontend
-                    valid_genders = [g.strip().lower() for g in value if g.strip().lower() in ["male", "female", "other", "unknown"]]
-                    if valid_genders:
-                        processed["gender"] = ",".join(valid_genders)  # FHIR supports comma-separated values
-                        logger.info(f"Gender filter (multiple): {valid_genders}")
-                elif isinstance(value, str) and value.strip().lower() in ["male", "female", "other", "unknown"]:
-                    processed["gender"] = value.strip().lower()
-                    logger.info(f"Gender filter: {value}")
-        elif key == "age_range" and resource_type.lower() == "patient":
-            # Handle age range filters from frontend
-            if value and isinstance(value, dict):
-                age_from = value.get('from')
-                age_to = value.get('to')
-                if age_from and age_from.isdigit():
-                    from datetime import datetime
-                    current_year = datetime.now().year
-                    birth_year = current_year - int(age_from)
-                    processed["birthdate"] = f"le{birth_year}-12-31"
-                if age_to and age_to.isdigit():
-                    from datetime import datetime
-                    current_year = datetime.now().year
-                    birth_year = current_year - int(age_to)
-                    existing_birthdate = processed.get("birthdate", "")
-                    if existing_birthdate:
-                        # Combine with existing constraint
-                        processed["birthdate"] = f"ge{birth_year}-01-01,{existing_birthdate}"
-                    else:
-                        processed["birthdate"] = f"ge{birth_year}-01-01"
-                logger.info(f"Age range filter: {age_from}-{age_to} -> {processed.get('birthdate', '')}")
-        elif key == "data_availability" and resource_type.lower() == "patient":
-            # Handle resource-based filtering for patients
-            if value and value.strip():
-                # Parse comma-separated resource types like "has_Observation,has_Condition"
-                resource_filters = [r.strip() for r in value.split(",") if r.strip()]
-                for resource_filter in resource_filters:
-                    if resource_filter.startswith("has_"):
-                        resource_type_name = resource_filter[4:]  # Remove "has_" prefix
-                        # Map to appropriate revinclude parameter
-                        if resource_type_name == "Observation":
-                            revinclude_resources.append("Observation:subject")
-                        elif resource_type_name == "Condition":
-                            revinclude_resources.append("Condition:subject")
-                        elif resource_type_name == "Procedure":
-                            revinclude_resources.append("Procedure:subject")
-                        elif resource_type_name == "MedicationRequest":
-                            revinclude_resources.append("MedicationRequest:subject")
-                        elif resource_type_name == "Encounter":
-                            revinclude_resources.append("Encounter:subject")
-                        elif resource_type_name == "DiagnosticReport":
-                            revinclude_resources.append("DiagnosticReport:subject")
-                        elif resource_type_name == "DocumentReference":
-                            revinclude_resources.append("DocumentReference:subject")
-                        elif resource_type_name == "AllergyIntolerance":
-                            revinclude_resources.append("AllergyIntolerance:patient")
-                        elif resource_type_name == "Immunization":
-                            revinclude_resources.append("Immunization:patient")
-        else:
-            processed[key] = value
-    
-    # Add revinclude parameters if any resource filters were specified
-    if revinclude_resources:
-        processed["_revinclude"] = ",".join(revinclude_resources)
-        
-    return processed
-
-def get_valid_sort_for_resource(resource_type: str, existing_params: dict) -> Optional[str]:
-    """Get valid server-side sort, avoiding override if already present"""
-    if any(k.startswith('_sort') for k in existing_params.keys()):
-        return existing_params.get('_sort')
-
-    rt = resource_type.lower()
-    if rt == "patient":
-        return "_id"           # sort by ID for sequential ordering
-    if rt == "observation":
-        return "-date"
-    if rt == "condition":
-        return "-onset-date"
-    if rt == "medicationrequest":
-        return "-authoredon"
-    return None
 
 async def get_server_total_count(url: str, search_params: Dict[str, str]) -> Optional[int]:
     """Try to get total from server using _summary=count"""
@@ -476,213 +104,6 @@ async def try_fallback_search(url: str, original_params: dict, resource_type: st
         logger.warning(f"Fallback (minimal) failed: {e}")
 
     return None
-
-# ----------------------------------------------------------------------
-# Configuration and Status endpoints
-# ----------------------------------------------------------------------
-
-async def _get_cached_config():
-    """Get cached configuration or fetch new one"""
-    now = datetime.now()
-    
-    # Check if cache is valid
-    if (_config_cache["cached_at"] and 
-        _config_cache["server_info"] and
-        now - _config_cache["cached_at"] < CONFIG_CACHE_DURATION):
-        return _config_cache["server_info"]
-    
-    # Fetch new configuration
-    try:
-        base_url = fhir.base().rstrip('/') + '/'
-        cap = await fhir.get_capabilities()
-        
-        server_info = {
-            "fhir_version": cap.get("fhirVersion"),
-            "server_name": cap.get("software", {}).get("name"),
-            "server_version": cap.get("software", {}).get("version"),
-            "base_url": base_url,
-            "supported_resources": fhir.list_resource_types(cap)
-        }
-        
-        # Update cache
-        _config_cache.update({
-            "server_info": server_info,
-            "cached_at": now
-        })
-        
-        logger.info("Configuration cached successfully")
-        return server_info
-        
-    except Exception as e:
-        logger.error(f"Error fetching server configuration: {e}")
-        return None
-
-
-@router.get("/config/status")
-async def get_backend_status():
-    """Get current backend status and configuration"""
-    try:
-        # Use cached configuration
-        server_info = await _get_cached_config()
-        
-        fhir_status = "connected" if server_info else "error"
-        fhir_details = server_info or {"error": "Failed to connect to FHIR server"}
-        
-        # Cache status
-        cache_status = {
-            "patient_cache_size": len(_patient_cache),
-            "cache_entries": list(_patient_cache.keys()),
-            "cache_duration_minutes": int(CACHE_DURATION.total_seconds() / 60)
-        }
-        
-        return {
-            "success": True,
-            "backend_version": "1.0.0",
-            "timestamp": datetime.now().isoformat(),
-            "fhir_server": {
-                "status": fhir_status,
-                "details": fhir_details
-            },
-            "cache": cache_status,
-            "configuration": {
-                "fhir_base_url": config.fhir_base_url,
-                "backend_port": config.backend_port,
-                "default_page_size": config.default_page_size,
-                "max_page_size": config.max_page_size,
-                "supported_resources": config.supported_resources
-            },
-            "supported_features": config.features
-        }
-    except Exception as e:
-        logger.error(f"Error getting backend status: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "backend_version": "1.0.0",
-            "timestamp": datetime.now().isoformat()
-        }
-
-@router.post("/config/cache/clear")
-async def clear_cache():
-    """Clear the patient cache"""
-    try:
-        cleared_count = len(_patient_cache)
-        _patient_cache.clear()
-        _cache_expiry.clear()
-        
-        return {
-            "success": True,
-            "message": f"Cache cleared. Removed {cleared_count} entries.",
-            "timestamp": datetime.now().isoformat()
-        }
-    except Exception as e:
-        logger.error(f"Error clearing cache: {e}")
-        return {"success": False, "error": str(e)}
-
-@router.get("/startup/status") 
-async def get_startup_status_detailed():
-    """Get detailed startup status and system health"""
-    try:
-        from app.startup import get_startup_status
-        startup_info = get_startup_status()
-        
-        # Add additional runtime information
-        runtime_info = {
-            "cache_stats": {
-                "patient_cache_size": len(_patient_cache),
-                "config_cache_age_hours": (
-                    (datetime.now() - _config_cache.get("cached_at", datetime.min)).total_seconds() / 3600
-                    if _config_cache.get("cached_at") else None
-                ),
-                "cache_entries": list(_patient_cache.keys())
-            },
-            "configuration": {
-                "patient_cache_duration_minutes": config.patient_cache_duration_minutes,
-                "config_cache_duration_hours": config.config_cache_duration_hours,
-                "max_cache_entries": config.max_cache_entries,
-                "default_page_size": config.default_page_size,
-                "max_page_size": config.max_page_size
-            },
-            "features": config.features,
-            "supported_resources": config.supported_resources
-        }
-        
-        return {
-            "success": True,
-            "startup_status": startup_info,
-            "runtime_info": runtime_info,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        logger.error(f"Error getting startup status: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
-
-# ----------------------------------------------------------------------
-# Debug endpoints
-# ----------------------------------------------------------------------
-
-@router.get("/debug/server-test")
-async def debug_server_connection():
-    """Quick server tests (capabilities & UUID presence)"""
-    try:
-        base_url = fhir.base().rstrip('/') + '/'
-        results = {"base_url": base_url, "tests": []}
-
-        try:
-            cap = await fhir.get_capabilities()
-            results["tests"].append({
-                "name": "Capabilities",
-                "success": True,
-                "fhir_version": cap.get("fhirVersion"),
-                "server_name": cap.get("software", {}).get("name"),
-                "server_version": cap.get("software", {}).get("version"),
-            })
-        except Exception as e:
-            results["tests"].append({"name": "Capabilities", "success": False, "error": str(e)})
-
-        try:
-            url = base_url + "Patient"
-            params = {"_count": "100"}
-            bundle = await fhir.fetch_bundle_with_deferred_handling(url, params)
-            patients = fhir.entries(bundle) if isinstance(bundle, dict) else []
-            # UUID detection removed - no longer needed for highlighting
-            results["tests"].append({
-                "name": "Basic Patient Count", 
-                "success": True,
-                "total_patients": len(patients)
-            })
-        except Exception as e:
-            results["tests"].append({"name": "Basic Patient Count", "success": False, "error": str(e)})
-
-        return {"success": True, "results": results}
-    except Exception as e:
-        logger.error(f"Debug server-test failed: {str(e)}")
-        return {"success": False, "error": str(e)}
-
-@router.get("/debug/direct-test")
-async def debug_direct_fhir_test():
-    """Direct call to public HAPI for quick validation"""
-    import httpx
-    try:
-        base_url = "https://hapi.fhir.org/baseR4/"
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            r = await client.get(f"{base_url}Patient", params={"_count": "50"},
-                                 headers={"Accept": "application/fhir+json"})
-        if r.status_code != 200:
-            return {"success": False, "status_code": r.status_code, "error": r.text}
-        data = r.json()
-        patients = [e.get("resource", {}) for e in data.get("entry", [])]
-        return {
-            "success": True,
-            "total_patients": len(patients)
-        }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
 
 # ----------------------------------------------------------------------
 # Patient utilities
@@ -2182,11 +1603,14 @@ async def search_resources(
 
         # Check cache AFTER parameters are finalized (including sort)
         cache_key = None
+        cached_response = None
         if resource_type.lower() == "patient":
-            cache_key = _get_cache_key(params)
-            cached_response = _get_cached_response(cache_key)
+            cache_mgr = get_patient_cache_manager()
+            cache_key = cache_mgr.generate_cache_key(params)
             if cached_response:
-                return cached_response
+                cached_response = await cache_mgr.get(cache_key)
+                if cached_response:
+                    return cached_response
 
         logger.info(f"Searching {resource_type} with params: {params}")
 
@@ -2210,7 +1634,7 @@ async def search_resources(
             
             # Apply data_availability filtering if specified
             if request and "data_availability" in dict(request.query_params):
-                data = _filter_patients_by_resources(patients, all_resources, dict(request.query_params))
+                data = filter_patients_by_resources(patients, all_resources, dict(request.query_params))
             else:
                 # Just return patients as-is from server
                 data = patients
@@ -2253,11 +1677,22 @@ async def search_resources(
             response["prioritized"] = False
             
         # Cache patient responses
-        if cache_key and resource_type.lower() == "patient":
-            _cache_response(cache_key, response)
-            
-            # Background prefetch next page
-            asyncio.create_task(_prefetch_next_page(params, response.get("pagination", {})))
+        if resource_type.lower() == "patient":
+            cache_mgr = get_patient_cache_manager()
+            if cache_key:
+                await cache_mgr.set(cache_key, response)
+        
+                # Background prefetch next page
+                async def fetch_next_page(next_params):
+                    base_url = fhir.base().rstrip('/') + '/'
+                    url = base_url + "Patient"
+                    return await fhir.fetch_bundle_with_deferred_handling(url, next_params)
+        
+                asyncio.create_task(cache_mgr.prefetch_next_page(
+                    params, 
+                    response.get("pagination", {}),
+                    fetch_next_page
+                ))
             
         return response
 

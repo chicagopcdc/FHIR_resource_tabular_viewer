@@ -1,5 +1,5 @@
 """
-Cache Manager for Aggregate Datasets
+Cache Manager for Aggregate Datasets and Patient Queries.
 Provides abstraction layer for memory and Redis backends with TTL and LRU management
 """
 
@@ -234,8 +234,142 @@ class CacheManager:
         """Generate unique dataset ID"""
         return str(uuid.uuid4())
 
-# Global cache manager instance
+
+class PatientCacheManager:
+    """Specialized cache manager for patient query results"""
+    
+    def __init__(self, cache_duration_minutes: int = 30, max_entries: int = 10):
+        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._expiry: Dict[str, datetime] = {}
+        self.cache_duration = timedelta(minutes=cache_duration_minutes)
+        self.max_entries = max_entries
+        self._lock = asyncio.Lock()
+    
+    def generate_cache_key(self, params: Dict[str, str]) -> Optional[str]:
+        """Generate cache key from parameters - includes filter parameters"""
+        cache_params = []
+        
+        # Always include pagination params
+        cache_params.append(f"count_{params.get('_count', '50')}")
+        cache_params.append(f"offset_{params.get('_getpagesoffset', '0')}")
+        
+        # Include search/filter parameters
+        filter_keys = ['name', 'gender', 'birthdate', '_id', '_has', 'telecom']
+        for key in sorted(filter_keys):
+            if key in params:
+                cache_params.append(f"{key}_{params[key]}")
+        
+        # Include sort
+        if '_sort' in params:
+            cache_params.append(f"sort_{params['_sort']}")
+        
+        # Only cache if it's not too complex (max 6 parameters)
+        if len(cache_params) <= 6:
+            cache_key = "patients_" + "_".join(cache_params)
+            logger.debug(f"Generated cache key: {cache_key}")
+            return cache_key
+        
+        logger.debug("Query too complex for caching")
+        return None
+    
+    async def get(self, cache_key: str) -> Optional[Dict[str, Any]]:
+        """Get cached response if valid"""
+        async with self._lock:
+            if cache_key and cache_key in self._cache:
+                if datetime.now() < self._expiry.get(cache_key, datetime.min):
+                    logger.info(f"Cache hit for {cache_key}")
+                    return self._cache[cache_key]
+                else:
+                    # Cache expired, remove it
+                    self._cache.pop(cache_key, None)
+                    self._expiry.pop(cache_key, None)
+            return None
+    
+    async def set(self, cache_key: str, response: Dict[str, Any]) -> bool:
+        """Cache a response"""
+        async with self._lock:
+            if not cache_key:
+                return False
+                
+            self._cache[cache_key] = response
+            self._expiry[cache_key] = datetime.now() + self.cache_duration
+            logger.info(f"Cached response for {cache_key}")
+            
+            # Clean up old cache entries (keep max entries)
+            if len(self._cache) > self.max_entries:
+                oldest_key = min(self._expiry.keys(), key=lambda k: self._expiry[k])
+                self._cache.pop(oldest_key, None)
+                self._expiry.pop(oldest_key, None)
+            
+            return True
+    
+    async def clear(self) -> int:
+        """Clear all cache entries"""
+        async with self._lock:
+            count = len(self._cache)
+            self._cache.clear()
+            self._expiry.clear()
+            logger.info(f"Cleared {count} cache entries")
+            return count
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get cache statistics"""
+        return {
+            "size": len(self._cache),
+            "entries": list(self._cache.keys()),
+            "duration_minutes": int(self.cache_duration.total_seconds() / 60),
+            "max_entries": self.max_entries
+        }
+    
+    async def prefetch_next_page(self, current_params: Dict[str, str], 
+                                  pagination: Dict[str, Any],
+                                  fetch_callback) -> None:
+        """Background prefetch of the next page"""
+        try:
+            if not pagination.get("has_next"):
+                return
+                
+            # Calculate next page parameters
+            count = int(current_params.get("_count", "50"))
+            current_offset = int(current_params.get("_getpagesoffset", "0"))
+            next_offset = current_offset + count
+            
+            next_params = current_params.copy()
+            next_params["_getpagesoffset"] = str(next_offset)
+            
+            next_cache_key = self.generate_cache_key(next_params)
+            cached = await self.get(next_cache_key)
+            
+            if next_cache_key and not cached:
+                logger.info(f"Background prefetching next page: offset {next_offset}")
+                
+                # Fetch next page using callback
+                bundle = await fetch_callback(next_params)
+                
+                if bundle and (not isinstance(bundle, dict) or bundle.get("resourceType") != "OperationOutcome"):
+                    # Process and cache the response
+                    from app.services import fhir
+                    all_resources = fhir.entries(bundle)
+                    patients = [r for r in all_resources if r.get("resourceType") == "Patient"]
+                    next_pagination = fhir.normalize_pagination(bundle)
+                    
+                    next_response = {
+                        "success": True,
+                        "resource_type": "Patient", 
+                        "data": patients,
+                        "pagination": next_pagination,
+                        "prioritized": False
+                    }
+                    await self.set(next_cache_key, next_response)
+                    logger.info(f"Successfully prefetched and cached next page")
+                    
+        except Exception as e:
+            logger.debug(f"Prefetch failed (non-critical): {e}")
+
+
+# Global cache manager instances
 _cache_manager: Optional[CacheManager] = None
+_patient_cache_manager: Optional[PatientCacheManager] = None
 
 def get_cache_manager() -> CacheManager:
     """Get global cache manager instance"""
@@ -249,3 +383,14 @@ def get_cache_manager() -> CacheManager:
             redis_url=getattr(config, 'cache_redis_url', None)
         )
     return _cache_manager
+
+def get_patient_cache_manager() -> PatientCacheManager:
+    """Get global patient cache manager instance"""
+    global _patient_cache_manager
+    if _patient_cache_manager is None:
+        from app.config import config
+        _patient_cache_manager = PatientCacheManager(
+            cache_duration_minutes=config.patient_cache_duration_minutes,
+            max_entries=getattr(config, 'max_cache_entries', 10)
+        )
+    return _patient_cache_manager

@@ -98,6 +98,8 @@ final-fhir/
 │   │   │   └── servers.py           # Server management endpoints
 │   │   ├── services/                # Service layer
 │   │   │   ├── aggregation.py       # Aggregation service
+│   │   │   ├── patient_scoring.py   # Patient scoring and filtering logic
+│   │   │   ├── search_params.py     # Parameter searching logic
 │   │   │   ├── cache_manager.py     # Cache handling
 │   │   │   ├── data_availability.py # Data availability checks
 │   │   │   ├── errors.py            # Error handling
