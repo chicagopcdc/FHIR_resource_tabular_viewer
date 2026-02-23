@@ -2,6 +2,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import Dict, List, Any, Optional
 from collections import defaultdict
+from app.services.path_extractor import extract_values_by_path
 import logging
 from datetime import datetime, timedelta
 from app.services import fhir
@@ -165,13 +166,13 @@ def build_filter_from_config(filter_config: Dict, resources: List[Dict]) -> Opti
         for resource in resources:
             # Apply category filter if specified (for Observation resources)
             if category_filter:
-                resource_categories = extract_value_by_path(resource, 'category[0].coding[0].code') or []
+                resource_categories = extract_values_by_path([resource], 'category[0].coding[0].code') or []
                 if not resource_categories or category_filter not in resource_categories:
                     continue
 
             # Extract raw values and display values
-            raw_vals = extract_value_by_path(resource, path) or []
-            disp_vals = extract_value_by_path(resource, display_path) or []
+            raw_vals = extract_values_by_path([resource], path) or []
+            disp_vals = extract_values_by_path([resource], display_path) or []
 
             # Process extracted values
             for i, rv in enumerate(raw_vals):
@@ -204,85 +205,6 @@ def build_filter_from_config(filter_config: Dict, resources: List[Dict]) -> Opti
         logger.error(f"Error building filter from config: {str(e)}")
         return None
 
-def extract_value_by_path(resource: Dict, path: str) -> List[str]:
-    """
-    Extract values from FHIR resource using path notation
-    Supports: field, field[0], field[*], nested.field.path
-    """
-    if not resource or not path:
-        return []
-
-    def get_nested_value(obj, path_parts):
-        if not obj or not path_parts:
-            return []
-        
-        part = path_parts[0]
-        remaining = path_parts[1:]
-        
-        # Handle array notation
-        if '[' in part and ']' in part:
-            field_name = part.split('[')[0]
-            index_part = part.split('[')[1].rstrip(']')
-            
-            if field_name not in obj:
-                return []
-            
-            field_value = obj[field_name]
-            
-            if not isinstance(field_value, list):
-                field_value = [field_value]
-            
-            results = []
-            
-            if index_part == '*' or index_part == '':
-                # Wildcard - process all items
-                for item in field_value:
-                    if remaining:
-                        results.extend(get_nested_value(item, remaining))
-                    else:
-                        results.append(item)
-            else:
-                # Specific index
-                try:
-                    idx = int(index_part)
-                    if 0 <= idx < len(field_value):
-                        if remaining:
-                            results.extend(get_nested_value(field_value[idx], remaining))
-                        else:
-                            results.append(field_value[idx])
-                except ValueError:
-                    pass
-            
-            return results
-        
-        else:
-            # Simple field access
-            if part not in obj:
-                return []
-            
-            value = obj[part]
-            
-            if remaining:
-                return get_nested_value(value, remaining)
-            else:
-                return [value] if not isinstance(value, list) else value
-
-    path_parts = path.split('.')
-    raw_results = get_nested_value(resource, path_parts)
-    
-    # Clean and convert results to strings
-    clean_results = []
-    for result in raw_results:
-        if result is not None:
-            if isinstance(result, dict):
-                # For complex objects, try to get display value
-                display_val = result.get('display') or result.get('text') or result.get('code')
-                if display_val:
-                    clean_results.append(str(display_val))
-            elif isinstance(result, (str, int, float, bool)):
-                clean_results.append(str(result))
-    
-    return clean_results
 
 def create_filter_options(values: List[str], display_values: List[str] = None) -> List[Dict]:
     """
