@@ -286,9 +286,9 @@ const Header = ({
           <button
             onClick={handleSearchSubmit}
             style={{
-              background: "#000000",
+              background: "#f0b6d6",
               color: "white",
-              border: "2px solid #50565c", // Match input border width
+              border: "2px solid #ffffff", // Match input border width
               padding: "0.5rem 1rem",
               borderRadius: "0 4px 4px 0",
               cursor: "pointer",
