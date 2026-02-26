@@ -259,7 +259,7 @@ const Header = ({
                   transform: "translateY(-50%)",
                   background: "none",
                   border: "none",
-                  color: "#999",
+                  color: "#c51515",
                   cursor: "pointer",
                   padding: "4px",
                   display: "flex",
@@ -286,9 +286,9 @@ const Header = ({
           <button
             onClick={handleSearchSubmit}
             style={{
-              background: "#007bff",
+              background: "#f0b6d6",
               color: "white",
-              border: "2px solid #007bff", // Match input border width
+              border: "2px solid #ffffff", // Match input border width
               padding: "0.5rem 1rem",
               borderRadius: "0 4px 4px 0",
               cursor: "pointer",
