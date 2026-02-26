@@ -15,7 +15,7 @@
 }
 
 .add-tab-modal {
-  background: white;
+  background: grey;
   border-radius: 12px;
   width: 100%;
   max-width: 1200px; /* Increased for better card display */
@@ -48,14 +48,15 @@
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #6c757d;
+  color: black;
+  background-color: pink;
   padding: 8px;
   border-radius: 4px;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
+  
   height: 32px;
 }
 
