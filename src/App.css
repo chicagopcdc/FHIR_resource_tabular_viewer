@@ -162,7 +162,7 @@
 .filter-search-input {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid #e0e0e0;
+  border: 3px solid #e0e0e0;
   border-radius: 4px;
   background-color: white;
   color: #333;
@@ -179,14 +179,14 @@
 .options-list {
   max-height: 200px;
   overflow-y: auto;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
+  border: 3px solid #e0e0e0;
+  border-radius: 5px;
   background: white;
 }
 
 .filter-option {
   padding: 0.25rem 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 2px solid #f0f0f0;
 }
 
 .filter-option:last-child {
