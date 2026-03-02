@@ -311,8 +311,8 @@ extractMedicalData(resources);
 ### Prerequisites
 
 - Node.js (v14 or higher)
+- Python 3.8 to 3.12 (Python 3.13+ not currently supported due to pydantic compatibility)
 - NPM or Yarn package manager
-- Backend FastAPI server (running on port 8000)
 - Access to FHIR-compliant server
 
 ### Installation Steps
@@ -324,14 +324,32 @@ git clone <repository-url>
 cd final-fhir
 ```
 
-2. **Install Dependencies**
+2. **Install Frontend Dependencies**
 
 ```bash
 npm install
 ```
 
-3. **Configure Environment**
-   Create `.env` file:
+3. **Set Up Backend Virtual Environment**
+
+**Important:** You must create and set up the virtual environment before running `npm run dev`.
+
+```bash
+cd fhir-backend-dynamic
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+cd ..
+```
+
+**Note:** If you get an error about `python3-venv` not being available, install it first:
+```bash
+# On Ubuntu/Debian:
+sudo apt install python3-venv
+```
+
+4. **Configure Environment**
+   Create `.env` file in `fhir-backend-dynamic/` directory:
 
 ```env
 REACT_APP_API_BASE_URL=http://localhost:8000
@@ -339,14 +357,25 @@ REACT_APP_FHIR_BASE_URL=https://hapi.fhir.org/baseR4/
 REACT_APP_TITLE=FHIR Patient Search
 ```
 
-4. **Start Development Server**
+5. **Start Development Servers**
 
 ```bash
-npm start
+npm run dev
 ```
 
-5. **Access Application**
-   Navigate to `http://localhost:3000`
+This single command starts both:
+- Frontend (React) on `http://localhost:3000`
+- Backend (FastAPI) on `http://localhost:8000`
+
+**Note for Windows users:** The startup script uses POSIX shell syntax. Windows users should either use WSL (Windows Subsystem for Linux) or start the backend manually:
+
+```bash
+cd fhir-backend-dynamic
+.venv\Scripts\activate
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Then in a separate terminal, run `npm start` for the frontend.
 
 ### Production Build
 
