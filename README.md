@@ -334,6 +334,8 @@ npm install
 
 **Important:** You must create and set up the virtual environment before running `npm run dev`.
 
+**Note:** The virtual environment (`.venv`) is not committed to the repository. All contributors must create it locally.
+
 ```bash
 cd fhir-backend-dynamic
 python3 -m venv .venv
@@ -349,7 +351,7 @@ sudo apt install python3-venv
 ```
 
 4. **Configure Environment**
-   Create `.env` file in `fhir-backend-dynamic/` directory:
+   Create `.env` file in the project root:
 
 ```env
 REACT_APP_API_BASE_URL=http://localhost:8000
@@ -363,19 +365,50 @@ REACT_APP_TITLE=FHIR Patient Search
 npm run dev
 ```
 
-This single command starts both:
+This command starts both:
 - Frontend (React) on `http://localhost:3000`
 - Backend (FastAPI) on `http://localhost:8000`
 
-**Note for Windows users:** The startup script uses POSIX shell syntax. Windows users should either use WSL (Windows Subsystem for Linux) or start the backend manually:
+**Technical Notes:**
+- Uses `start-backend-dev.sh` - a basic POSIX shell script
+- Script activates virtual environment and runs uvicorn
+- Virtual environment (`.venv`) is not committed - contributors must create locally
 
-```bash
-cd fhir-backend-dynamic
-.venv\Scripts\activate
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
+**Platform Notes:**
+- ✅ **Linux/macOS**: `npm run dev` works directly
+- ⚠️ **Windows**: **Must use WSL (Windows Subsystem for Linux)** or run backend manually:
+  
+  **Option 1 - WSL (Recommended):**
+  ```bash
+  # In WSL terminal
+  npm run dev
+  ```
+  
+  **Option 2 - Manual (PowerShell/CMD):**
+  
+  **PowerShell:**
+  ```powershell
+  # Terminal 1 - Backend
+  cd fhir-backend-dynamic
+  .\.venv\Scripts\Activate.ps1
+  python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+  
+  # Terminal 2 - Frontend  
+  npm start
+  ```
+  
+  **Command Prompt (CMD):**
+  ```cmd
+  # Terminal 1 - Backend
+  cd fhir-backend-dynamic
+  .venv\Scripts\activate.bat
+  python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+  
+  # Terminal 2 - Frontend  
+  npm start
+  ```
 
-Then in a separate terminal, run `npm start` for the frontend.
+
 
 ### Production Build
 
