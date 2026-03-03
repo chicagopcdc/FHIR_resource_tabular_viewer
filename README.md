@@ -306,36 +306,24 @@ extractMedicalData(resources);
 | `/api/filters/targets`                | GET    | Get filter configurations     |
 | `/api/filters/{type}/metadata`        | GET    | Get resource-specific filters |
 
-## Installation & Setup
+## Setup
 
-### Prerequisites
+### Requirements
 
-- Node.js (v14 or higher)
-- Python 3.8 to 3.12 (Python 3.13+ not currently supported due to pydantic compatibility)
-- NPM or Yarn package manager
-- Access to FHIR-compliant server
+- Node.js v14+
+- Python 3.8+
+- npm
 
-### Installation Steps
+### Installation
 
-1. **Clone Repository**
-
+1. Clone and install dependencies:
 ```bash
-git clone <repository-url>
+git clone <repo-url>
 cd final-fhir
-```
-
-2. **Install Frontend Dependencies**
-
-```bash
 npm install
 ```
 
-3. **Set Up Backend Virtual Environment**
-
-**Important:** You must create and set up the virtual environment before running `npm run dev`.
-
-**Note:** The virtual environment (`.venv`) is not committed to the repository. All contributors must create it locally.
-
+2. Setup backend:
 ```bash
 cd fhir-backend-dynamic
 python3 -m venv .venv
@@ -344,69 +332,39 @@ pip install -r requirements.txt
 cd ..
 ```
 
-**Note:** If you get an error about `python3-venv` not being available, install it first:
-```bash
-# On Ubuntu/Debian:
-sudo apt install python3-venv
+3. Create `.env`:
 ```
-
-4. **Configure Environment**
-   Create `.env` file in the project root:
-
-```env
 REACT_APP_API_BASE_URL=http://localhost:8000
 REACT_APP_FHIR_BASE_URL=https://hapi.fhir.org/baseR4/
 REACT_APP_TITLE=FHIR Patient Search
 ```
 
-5. **Start Development Servers**
-
+4. Start development:
 ```bash
 npm run dev
 ```
 
-This command starts both:
-- Frontend (React) on `http://localhost:3000`
-- Backend (FastAPI) on `http://localhost:8000`
+Opens frontend at http://localhost:3000 and backend at http://localhost:8000.
 
-**Technical Notes:**
-- Uses `start-backend-dev.sh` - a basic POSIX shell script
-- Script activates virtual environment and runs uvicorn
-- Virtual environment (`.venv`) is not committed - contributors must create locally
+### Windows Users
 
-**Platform Notes:**
-- ✅ **Linux/macOS**: `npm run dev` works directly
-- ⚠️ **Windows**: **Must use WSL (Windows Subsystem for Linux)** or run backend manually:
-  
-  **Option 1 - WSL (Recommended):**
-  ```bash
-  # In WSL terminal
-  npm run dev
-  ```
-  
-  **Option 2 - Manual (PowerShell/CMD):**
-  
-  **PowerShell:**
-  ```powershell
-  # Terminal 1 - Backend
-  cd fhir-backend-dynamic
-  .\.venv\Scripts\Activate.ps1
-  python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-  
-  # Terminal 2 - Frontend  
-  npm start
-  ```
-  
-  **Command Prompt (CMD):**
-  ```cmd
-  # Terminal 1 - Backend
-  cd fhir-backend-dynamic
-  .venv\Scripts\activate.bat
-  python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-  
-  # Terminal 2 - Frontend  
-  npm start
-  ```
+Use WSL or run manually:
+
+PowerShell:
+```powershell
+cd fhir-backend-dynamic
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+CMD:
+```cmd
+cd fhir-backend-dynamic
+.venv\Scripts\activate.bat
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Then run `npm start` in another terminal.
 
 
 
