@@ -306,47 +306,67 @@ extractMedicalData(resources);
 | `/api/filters/targets`                | GET    | Get filter configurations     |
 | `/api/filters/{type}/metadata`        | GET    | Get resource-specific filters |
 
-## Installation & Setup
+## Setup
 
-### Prerequisites
+### Requirements
 
-- Node.js (v14 or higher)
-- NPM or Yarn package manager
-- Backend FastAPI server (running on port 8000)
-- Access to FHIR-compliant server
+- Node.js v14+
+- Python 3.8+
+- npm
 
-### Installation Steps
+### Installation
 
-1. **Clone Repository**
-
+1. Clone and install dependencies:
 ```bash
-git clone <repository-url>
+git clone <repo-url>
 cd final-fhir
-```
-
-2. **Install Dependencies**
-
-```bash
 npm install
 ```
 
-3. **Configure Environment**
-   Create `.env` file:
+2. Setup backend:
+```bash
+cd fhir-backend-dynamic
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+cd ..
+```
 
-```env
+3. Create `.env`:
+```
 REACT_APP_API_BASE_URL=http://localhost:8000
 REACT_APP_FHIR_BASE_URL=https://hapi.fhir.org/baseR4/
 REACT_APP_TITLE=FHIR Patient Search
 ```
 
-4. **Start Development Server**
-
+4. Start development:
 ```bash
-npm start
+npm run dev
 ```
 
-5. **Access Application**
-   Navigate to `http://localhost:3000`
+Opens frontend at http://localhost:3000 and backend at http://localhost:8000.
+
+### Windows Users
+
+Use WSL or run manually:
+
+PowerShell:
+```powershell
+cd fhir-backend-dynamic
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+CMD:
+```cmd
+cd fhir-backend-dynamic
+.venv\Scripts\activate.bat
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Then run `npm start` in another terminal.
+
+
 
 ### Production Build
 
