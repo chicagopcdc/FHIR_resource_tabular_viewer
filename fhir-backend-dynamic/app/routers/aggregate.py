@@ -1,10 +1,6 @@
-"""
-FastAPI router for aggregate dataset endpoints
-"""
-
 import logging
 from typing import Dict, Any
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, status
 from fastapi.responses import JSONResponse
 
 from app.config import config
@@ -14,42 +10,52 @@ from app.models.aggregate import (
     ProgressResponse, ErrorResponse, DeleteResponse
 )
 
-router = APIRouter(prefix="/aggregate", tags=["aggregate"])
-logger = logging.getLogger(__name__)
+# 1. Use a more descriptive tag for OpenAPI/Swagger docs
+router = APIRouter(prefix="/aggregate", tags=["Data Aggregation"])
+logger = logging.getLogger("app.aggregate")
 
 def check_aggregate_enabled():
-    """Dependency to check if aggregate functionality is enabled"""
+    """Dependency to check if aggregate functionality is enabled."""
     if not config.aggregate_enabled:
         raise HTTPException(
-            status_code=503,
-            detail="Aggregate functionality is currently disabled. Use traditional pagination endpoints."
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Aggregate functionality is disabled. Please use standard pagination."
         )
 
-@router.post("/{resource_type}", response_model=AggregateResponse)
+@router.post("/{resource_type}", 
+             status_code=status.HTTP_202_ACCEPTED, 
+             response_model=AggregateResponse)
 async def create_aggregate(
     resource_type: str,
     request: AggregateRequest,
+    background_tasks: BackgroundTasks, # For non-blocking execution
     _: None = Depends(check_aggregate_enabled)
 ):
     """
-    Create aggregated dataset for a FHIR resource type with given filters.
-    Fetches all matching resources following FHIR Bundle.link pagination.
+    Trigger an aggregated dataset build in the background.
+    Returns 202 Accepted immediately to prevent HTTP timeouts.
     """
-    try:
-        logger.info(f"Creating aggregate for {resource_type} with filters: {request.filters}")
-        
-        aggregation_service = get_aggregation_service()
-        result = await aggregation_service.build_dataset(
-            resource_type=resource_type,
-            search_params={**request.filters, **request.search_params},
-            user_id=request.user_session
-        )
-        
-        return AggregateResponse(**result)
-        
-    except Exception as e:
-        logger.error(f"Failed to create aggregate for {resource_type}: {e}")
-        raise HTTPException(status_code=500, detail=f"Aggregation failed: {str(e)}")
+    logger.info("Initiating aggregate build for %s | Session: %s", resource_type, request.user_session)
+    
+    aggregation_service = get_aggregation_service()
+    
+    # Generate ID first so we can return it immediately
+    dataset_id = f"ds_{resource_type}_{hash(request.user_session)}"
+    
+    # Move the heavy lifting to a background thread/task
+    background_tasks.add_task(
+        aggregation_service.build_dataset,
+        resource_type=resource_type,
+        search_params={**request.filters, **request.search_params},
+        user_id=request.user_session,
+        dataset_id=dataset_id
+    )
+    
+    return {
+        "dataset_id": dataset_id,
+        "status": "processing",
+        "message": "Aggregation started in background."
+    }
 
 @router.get("/{dataset_id}/slice", response_model=SliceResponse)
 async def get_dataset_slice(
