@@ -1211,3 +1211,71 @@ export async function checkSpecificResources(resourceTypes) {
   }
 }
 
+// =============================================================================
+// DATA SOURCE API — Local file upload & bucket connectors
+// =============================================================================
+
+/**
+ * Upload a local FHIR file (Bundle JSON or NDJSON).
+ * Uses raw fetch (not safeFetch) because file uploads need multipart/form-data.
+ * Returns: { success, name, resource_counts, total_resources, message }
+ */
+export async function uploadFileSource(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_BASE}/sources/file`, {
+    method: "POST",
+    body: formData,
+    // NOTE: do NOT set Content-Type — browser sets multipart boundary automatically
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+    throw new Error(err.detail || "Upload failed");
+  }
+  return res.json();
+}
+
+/**
+ * Get the currently active data source.
+ * Returns: { type: "file"|"live", name, resource_counts, total_resources, base_url }
+ */
+export async function getActiveSource() {
+  const res = await fetch(`${API_BASE}/sources/active`);
+  return res.json();
+}
+
+/**
+ * Remove the active file/bucket source and revert to live FHIR server.
+ * Returns: { success, message, active_source }
+ */
+export async function clearFileSource() {
+  const res = await fetch(`${API_BASE}/sources/file`, { method: "DELETE" });
+  return res.json();
+}
+
+/**
+ * Connect an S3 bucket file as the active data source.
+ * Returns: { success, name, resource_counts, total_resources }
+ */
+export async function connectBucketSource({ bucket, key, region, accessKey, secretKey }) {
+  const res = await fetch(`${API_BASE}/sources/bucket/s3`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      bucket,
+      key,
+      region: region || "us-east-1",
+      access_key: accessKey || null,
+      secret_key: secretKey || null,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+    throw new Error(err.detail || "Failed to connect bucket source");
+  }
+  return res.json();
+}
+

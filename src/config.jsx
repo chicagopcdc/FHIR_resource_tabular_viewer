@@ -17,14 +17,14 @@ if (typeof window !== 'undefined' && window.APP_CONFIG) {
 export const CONFIG = {
   // API Configuration
   api: {
-    baseUrl: process.env.REACT_APP_API_BASE_URL || yamlConfig?.frontend?.api_base_url || 'http://localhost:8000',
-    timeout: parseInt(process.env.REACT_APP_TIMEOUT) || yamlConfig?.fhir?.timeout_seconds * 1000 || 30000,
-    maxRetries: parseInt(process.env.REACT_APP_MAX_RETRIES) || yamlConfig?.fhir?.max_retries || 1,
+    baseUrl: import.meta.env.VITE_API_BASE_URL || yamlConfig?.frontend?.api_base_url || 'http://localhost:8000',
+    timeout: parseInt(import.meta.env.VITE_TIMEOUT) || yamlConfig?.fhir?.timeout_seconds * 1000 || 30000,
+    maxRetries: parseInt(import.meta.env.VITE_MAX_RETRIES) || yamlConfig?.fhir?.max_retries || 1,
   },
 
   // FHIR Server Configuration
   fhir: {
-    baseUrl: process.env.REACT_APP_FHIR_BASE_URL || yamlConfig?.fhir?.base_url || 'https://hapi.fhir.org/baseR4/',
+    baseUrl: import.meta.env.VITE_FHIR_BASE_URL || yamlConfig?.fhir?.base_url || 'https://hapi.fhir.org/baseR4/',
     supportedResources: yamlConfig?.fhir?.supported_resources || [
       'Patient', 'Observation', 'Condition', 'Procedure', 'MedicationRequest',
       'Encounter', 'DiagnosticReport', 'DocumentReference', 'AllergyIntolerance', 'Immunization',
@@ -37,33 +37,33 @@ export const CONFIG = {
 
   // UI Configuration
   ui: {
-    title: process.env.REACT_APP_TITLE || yamlConfig?.frontend?.title || 'FHIR Patient Search',
-    defaultPageSize: parseInt(process.env.REACT_APP_DEFAULT_PAGE_SIZE) || yamlConfig?.frontend?.ui?.default_page_size || 50,
-    maxSearchResults: parseInt(process.env.REACT_APP_MAX_SEARCH_RESULTS) || yamlConfig?.frontend?.ui?.max_search_results || 200,
+    title: import.meta.env.VITE_TITLE || yamlConfig?.frontend?.title || 'FHIR Patient Search',
+    defaultPageSize: parseInt(import.meta.env.VITE_DEFAULT_PAGE_SIZE) || yamlConfig?.frontend?.ui?.default_page_size || 50,
+    maxSearchResults: parseInt(import.meta.env.VITE_MAX_SEARCH_RESULTS) || yamlConfig?.frontend?.ui?.max_search_results || 200,
     pageSizeOptions: yamlConfig?.frontend?.ui?.page_size_options || [25, 50, 100, 200],
-    enableExport: process.env.REACT_APP_ENABLE_EXPORT !== 'false' && (yamlConfig?.frontend?.ui?.enable_export !== false),
-    enableFilters: process.env.REACT_APP_ENABLE_FILTERS !== 'false' && (yamlConfig?.frontend?.ui?.enable_filters !== false),
-    aggregateEnabled: process.env.REACT_APP_AGGREGATE_ENABLED === 'true' || (yamlConfig?.frontend?.ui?.aggregate_enabled === true),
+    enableExport: import.meta.env.VITE_ENABLE_EXPORT !== 'false' && (yamlConfig?.frontend?.ui?.enable_export !== false),
+    enableFilters: import.meta.env.VITE_ENABLE_FILTERS !== 'false' && (yamlConfig?.frontend?.ui?.enable_filters !== false),
+    aggregateEnabled: import.meta.env.VITE_AGGREGATE_ENABLED === 'true' || (yamlConfig?.frontend?.ui?.aggregate_enabled === true),
   },
 
   // Cache Configuration
   cache: {
-    requestCacheTtl: parseInt(process.env.REACT_APP_CACHE_TTL) || yamlConfig?.frontend?.cache?.request_cache_ttl_minutes * 60 * 1000 || 5 * 60 * 1000, // 5 minutes in ms
-    maxCacheSize: parseInt(process.env.REACT_APP_MAX_CACHE_SIZE) || yamlConfig?.frontend?.cache?.max_cache_size || 100,
+    requestCacheTtl: parseInt(import.meta.env.VITE_CACHE_TTL) || yamlConfig?.frontend?.cache?.request_cache_ttl_minutes * 60 * 1000 || 5 * 60 * 1000, // 5 minutes in ms
+    maxCacheSize: parseInt(import.meta.env.VITE_MAX_CACHE_SIZE) || yamlConfig?.frontend?.cache?.max_cache_size || 100,
   },
 
   // Feature Flags
   features: {
-    conditionCodeSearch: process.env.REACT_APP_CONDITION_SEARCH !== 'false' && (yamlConfig?.features?.condition_code_search !== false),
-    ageFiltering: process.env.REACT_APP_AGE_FILTERING !== 'false' && (yamlConfig?.features?.age_filtering !== false),
-    genderFiltering: process.env.REACT_APP_GENDER_FILTERING !== 'false' && (yamlConfig?.features?.gender_filtering !== false),
-    demographicSearch: process.env.REACT_APP_DEMOGRAPHIC_SEARCH !== 'false' && (yamlConfig?.features?.demographic_search !== false),
-    patientCaching: process.env.REACT_APP_PATIENT_CACHING !== 'false' && (yamlConfig?.features?.patient_caching !== false),
-    backgroundPrefetch: process.env.REACT_APP_BACKGROUND_PREFETCH !== 'false' && (yamlConfig?.features?.background_prefetch !== false),
-    exportFunctionality: process.env.REACT_APP_EXPORT_FUNCTIONALITY !== 'false' && (yamlConfig?.features?.export_functionality !== false),
-    advancedFilters: process.env.REACT_APP_ADVANCED_FILTERS !== 'false' && (yamlConfig?.features?.advanced_filters !== false),
-    aggregateEnabled: process.env.REACT_APP_AGGREGATE_ENABLED === 'true' || (yamlConfig?.frontend?.ui?.aggregate_enabled === true),
-    progressEnabled: process.env.REACT_APP_PROGRESS_ENABLED !== 'false' && (yamlConfig?.backend?.aggregate?.progress_enabled !== false),
+    conditionCodeSearch: import.meta.env.VITE_CONDITION_SEARCH !== 'false' && (yamlConfig?.features?.condition_code_search !== false),
+    ageFiltering: import.meta.env.VITE_AGE_FILTERING !== 'false' && (yamlConfig?.features?.age_filtering !== false),
+    genderFiltering: import.meta.env.VITE_GENDER_FILTERING !== 'false' && (yamlConfig?.features?.gender_filtering !== false),
+    demographicSearch: import.meta.env.VITE_DEMOGRAPHIC_SEARCH !== 'false' && (yamlConfig?.features?.demographic_search !== false),
+    patientCaching: import.meta.env.VITE_PATIENT_CACHING !== 'false' && (yamlConfig?.features?.patient_caching !== false),
+    backgroundPrefetch: import.meta.env.VITE_BACKGROUND_PREFETCH !== 'false' && (yamlConfig?.features?.background_prefetch !== false),
+    exportFunctionality: import.meta.env.VITE_EXPORT_FUNCTIONALITY !== 'false' && (yamlConfig?.features?.export_functionality !== false),
+    advancedFilters: import.meta.env.VITE_ADVANCED_FILTERS !== 'false' && (yamlConfig?.features?.advanced_filters !== false),
+    aggregateEnabled: import.meta.env.VITE_AGGREGATE_ENABLED === 'true' || (yamlConfig?.frontend?.ui?.aggregate_enabled === true),
+    progressEnabled: import.meta.env.VITE_PROGRESS_ENABLED !== 'false' && (yamlConfig?.backend?.aggregate?.progress_enabled !== false),
   },
 
   // Search Configuration
@@ -81,14 +81,14 @@ export const CONFIG = {
 
   // Performance Settings
   performance: {
-    requestTimeout: parseInt(process.env.REACT_APP_REQUEST_TIMEOUT) || yamlConfig?.performance?.request_timeout_seconds * 1000 || 30000,
-    maxConcurrentRequests: parseInt(process.env.REACT_APP_MAX_CONCURRENT_REQUESTS) || yamlConfig?.performance?.max_concurrent_requests || 50,
+    requestTimeout: parseInt(import.meta.env.VITE_REQUEST_TIMEOUT) || yamlConfig?.performance?.request_timeout_seconds * 1000 || 30000,
+    maxConcurrentRequests: parseInt(import.meta.env.VITE_MAX_CONCURRENT_REQUESTS) || yamlConfig?.performance?.max_concurrent_requests || 50,
   },
 
   // Development Settings
   development: {
-    enableDebugLogs: process.env.REACT_APP_DEBUG === 'true' || process.env.NODE_ENV === 'development',
-    enablePerformanceLogging: process.env.REACT_APP_PERFORMANCE_LOGS === 'true',
+    enableDebugLogs: import.meta.env.VITE_DEBUG === 'true' || import.meta.env.MODE === 'development',
+    enablePerformanceLogging: import.meta.env.VITE_PERFORMANCE_LOGS === 'true',
   }
 };
 
@@ -147,7 +147,7 @@ export function validateConfig() {
  * Get environment name
  */
 export function getEnvironment() {
-  return process.env.NODE_ENV || 'development';
+  return import.meta.env.MODE || 'development';
 }
 
 /**

@@ -7,3 +7,4 @@ tenacity==8.5.0
 aiobreaker==1.2.0
 python-dotenv==1.0.1
 PyYAML==6.0.1
+boto3>=1.34.0

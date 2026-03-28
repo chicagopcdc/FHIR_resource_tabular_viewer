@@ -1,7 +1,7 @@
 # app/main.py - Updated to include startup system and configuration
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import resources, health, servers, filters, metadata
+from app.routers import resources, health, servers, filters, metadata, sources
 # , aggregate  # TEMPORARILY DISABLED
 from app.core.logging import setup_logging
 from app.startup import initialize_backend, get_startup_status
@@ -84,7 +84,8 @@ app.include_router(health.router,     prefix="/api")
 app.include_router(resources.router,  prefix="/api") 
 app.include_router(servers.router,    prefix="/api")
 app.include_router(filters.router,    prefix="/api")  # Filter endpoints
-app.include_router(metadata.router,   prefix="/api")  # NEW: FHIR Metadata endpoints
+app.include_router(metadata.router,   prefix="/api")  # FHIR Metadata endpoints
+app.include_router(sources.router,    prefix="/api")  # Local file source endpoints
 
 # Conditionally include aggregate router behind feature flag
 # TEMPORARILY DISABLED - causing issues

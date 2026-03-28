@@ -1,0 +1,472 @@
+{
+    "resourceType": "Bundle",
+    "type": "searchset",
+    "total": 15,
+    "entry": [
+        {
+            "fullUrl": "urn:uuid:e7af339d-2841-4124-8b23-7a62feffaa15",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "test-patient-1",
+                "active": true,
+                "name": [
+                    {
+                        "use": "official",
+                        "family": "Smith",
+                        "given": [
+                            "James"
+                        ]
+                    }
+                ],
+                "gender": "male",
+                "birthDate": "1960-05-15",
+                "address": [
+                    {
+                        "use": "home",
+                        "line": [
+                            "100 Main St"
+                        ],
+                        "city": "New York",
+                        "state": "CA",
+                        "postalCode": "90000",
+                        "country": "US"
+                    }
+                ]
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:7dbbd107-e04f-4d1b-a85b-5948c7ba467c",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "test-patient-2",
+                "active": true,
+                "name": [
+                    {
+                        "use": "official",
+                        "family": "Johnson",
+                        "given": [
+                            "Mary"
+                        ]
+                    }
+                ],
+                "gender": "female",
+                "birthDate": "1963-05-15",
+                "address": [
+                    {
+                        "use": "home",
+                        "line": [
+                            "101 Main St"
+                        ],
+                        "city": "Los Angeles",
+                        "state": "CA",
+                        "postalCode": "90001",
+                        "country": "US"
+                    }
+                ]
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:4394e6a9-feb1-4bad-905e-2001b2178281",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "test-patient-3",
+                "active": true,
+                "name": [
+                    {
+                        "use": "official",
+                        "family": "Williams",
+                        "given": [
+                            "Robert"
+                        ]
+                    }
+                ],
+                "gender": "male",
+                "birthDate": "1966-05-15",
+                "address": [
+                    {
+                        "use": "home",
+                        "line": [
+                            "102 Main St"
+                        ],
+                        "city": "Chicago",
+                        "state": "CA",
+                        "postalCode": "90002",
+                        "country": "US"
+                    }
+                ]
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:ff256bcf-0e41-49d1-a120-242306189a7e",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "test-patient-4",
+                "active": true,
+                "name": [
+                    {
+                        "use": "official",
+                        "family": "Brown",
+                        "given": [
+                            "Patricia"
+                        ]
+                    }
+                ],
+                "gender": "female",
+                "birthDate": "1969-05-15",
+                "address": [
+                    {
+                        "use": "home",
+                        "line": [
+                            "103 Main St"
+                        ],
+                        "city": "Houston",
+                        "state": "CA",
+                        "postalCode": "90003",
+                        "country": "US"
+                    }
+                ]
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:a0f775ff-7cd9-4631-b831-07413fe28f37",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "test-patient-5",
+                "active": true,
+                "name": [
+                    {
+                        "use": "official",
+                        "family": "Jones",
+                        "given": [
+                            "John"
+                        ]
+                    }
+                ],
+                "gender": "male",
+                "birthDate": "1972-05-15",
+                "address": [
+                    {
+                        "use": "home",
+                        "line": [
+                            "104 Main St"
+                        ],
+                        "city": "Phoenix",
+                        "state": "CA",
+                        "postalCode": "90004",
+                        "country": "US"
+                    }
+                ]
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:67736d42-7b4e-4ab7-8236-d2a434538809",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "test-patient-6",
+                "active": true,
+                "name": [
+                    {
+                        "use": "official",
+                        "family": "Garcia",
+                        "given": [
+                            "Jennifer"
+                        ]
+                    }
+                ],
+                "gender": "female",
+                "birthDate": "1975-05-15",
+                "address": [
+                    {
+                        "use": "home",
+                        "line": [
+                            "105 Main St"
+                        ],
+                        "city": "New York",
+                        "state": "CA",
+                        "postalCode": "90005",
+                        "country": "US"
+                    }
+                ]
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:2c4be305-ae70-49f7-8ddd-57ad7af6dae9",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "test-patient-7",
+                "active": true,
+                "name": [
+                    {
+                        "use": "official",
+                        "family": "Miller",
+                        "given": [
+                            "Michael"
+                        ]
+                    }
+                ],
+                "gender": "male",
+                "birthDate": "1978-05-15",
+                "address": [
+                    {
+                        "use": "home",
+                        "line": [
+                            "106 Main St"
+                        ],
+                        "city": "Los Angeles",
+                        "state": "CA",
+                        "postalCode": "90006",
+                        "country": "US"
+                    }
+                ]
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:9ff19346-96ba-4568-93a8-a1f54c46453a",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "test-patient-8",
+                "active": true,
+                "name": [
+                    {
+                        "use": "official",
+                        "family": "Davis",
+                        "given": [
+                            "Linda"
+                        ]
+                    }
+                ],
+                "gender": "female",
+                "birthDate": "1981-05-15",
+                "address": [
+                    {
+                        "use": "home",
+                        "line": [
+                            "107 Main St"
+                        ],
+                        "city": "Chicago",
+                        "state": "CA",
+                        "postalCode": "90007",
+                        "country": "US"
+                    }
+                ]
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:d8516af6-ee17-4125-b2f9-fa45c688250a",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "test-patient-9",
+                "active": true,
+                "name": [
+                    {
+                        "use": "official",
+                        "family": "Rodriguez",
+                        "given": [
+                            "David"
+                        ]
+                    }
+                ],
+                "gender": "male",
+                "birthDate": "1984-05-15",
+                "address": [
+                    {
+                        "use": "home",
+                        "line": [
+                            "108 Main St"
+                        ],
+                        "city": "Houston",
+                        "state": "CA",
+                        "postalCode": "90008",
+                        "country": "US"
+                    }
+                ]
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:42730bb2-0603-45f2-b830-784b22196ea2",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "test-patient-10",
+                "active": true,
+                "name": [
+                    {
+                        "use": "official",
+                        "family": "Martinez",
+                        "given": [
+                            "Elizabeth"
+                        ]
+                    }
+                ],
+                "gender": "female",
+                "birthDate": "1987-05-15",
+                "address": [
+                    {
+                        "use": "home",
+                        "line": [
+                            "109 Main St"
+                        ],
+                        "city": "Phoenix",
+                        "state": "CA",
+                        "postalCode": "90009",
+                        "country": "US"
+                    }
+                ]
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:5054a9ea-c797-4228-83b1-0e6987667409",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "test-patient-11",
+                "active": true,
+                "name": [
+                    {
+                        "use": "official",
+                        "family": "Smith",
+                        "given": [
+                            "William"
+                        ]
+                    }
+                ],
+                "gender": "male",
+                "birthDate": "1990-05-15",
+                "address": [
+                    {
+                        "use": "home",
+                        "line": [
+                            "110 Main St"
+                        ],
+                        "city": "New York",
+                        "state": "CA",
+                        "postalCode": "90010",
+                        "country": "US"
+                    }
+                ]
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:a72d2426-2386-4ba6-9db3-e9f1bb5b7ff8",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "test-patient-12",
+                "active": true,
+                "name": [
+                    {
+                        "use": "official",
+                        "family": "Johnson",
+                        "given": [
+                            "Barbara"
+                        ]
+                    }
+                ],
+                "gender": "female",
+                "birthDate": "1993-05-15",
+                "address": [
+                    {
+                        "use": "home",
+                        "line": [
+                            "111 Main St"
+                        ],
+                        "city": "Los Angeles",
+                        "state": "CA",
+                        "postalCode": "90011",
+                        "country": "US"
+                    }
+                ]
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:ecd95ff5-e5bd-4307-886e-a6a7c642c19a",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "test-patient-13",
+                "active": true,
+                "name": [
+                    {
+                        "use": "official",
+                        "family": "Williams",
+                        "given": [
+                            "Richard"
+                        ]
+                    }
+                ],
+                "gender": "male",
+                "birthDate": "1996-05-15",
+                "address": [
+                    {
+                        "use": "home",
+                        "line": [
+                            "112 Main St"
+                        ],
+                        "city": "Chicago",
+                        "state": "CA",
+                        "postalCode": "90012",
+                        "country": "US"
+                    }
+                ]
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:fd7cc3f5-af48-480e-8568-7e8647f02378",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "test-patient-14",
+                "active": true,
+                "name": [
+                    {
+                        "use": "official",
+                        "family": "Brown",
+                        "given": [
+                            "Susan"
+                        ]
+                    }
+                ],
+                "gender": "female",
+                "birthDate": "1999-05-15",
+                "address": [
+                    {
+                        "use": "home",
+                        "line": [
+                            "113 Main St"
+                        ],
+                        "city": "Houston",
+                        "state": "CA",
+                        "postalCode": "90013",
+                        "country": "US"
+                    }
+                ]
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:67324bda-5578-427c-9df8-31cd308a6066",
+            "resource": {
+                "resourceType": "Patient",
+                "id": "test-patient-15",
+                "active": true,
+                "name": [
+                    {
+                        "use": "official",
+                        "family": "Jones",
+                        "given": [
+                            "Joseph"
+                        ]
+                    }
+                ],
+                "gender": "male",
+                "birthDate": "2002-05-15",
+                "address": [
+                    {
+                        "use": "home",
+                        "line": [
+                            "114 Main St"
+                        ],
+                        "city": "Phoenix",
+                        "state": "CA",
+                        "postalCode": "90014",
+                        "country": "US"
+                    }
+                ]
+            }
+        }
+    ]
+}

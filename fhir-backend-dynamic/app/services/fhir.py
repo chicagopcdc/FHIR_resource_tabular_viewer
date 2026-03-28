@@ -129,13 +129,21 @@ def extract_pagination_token(url: str) -> Optional[str]:
 
 async def fetch_bundle_with_deferred_handling(url: str, params: Optional[Dict] = None) -> Dict:
     """
-    FIXED: Enhanced bundle fetching with deferred pagination handling
-    Handles HAPI's deferred paging and server errors gracefully
+    Enhanced bundle fetching with deferred pagination handling.
+    Handles HAPI's deferred paging and server errors gracefully.
+    When a local file source is active, serves all requests from the
+    in-memory FileStore instead of making any HTTP calls.
     """
+    # --- File store short-circuit (lazy import avoids circular imports) ---
+    from app.services import source_registry  # noqa: PLC0415
+    if source_registry.is_file_active():
+        return source_registry.get_file_store().query(url, params or {})
+    # --- End file store short-circuit ---
+
     logger.info(f"Fetching bundle from: {url}")
     if params:
         logger.info(f"With params: {params}")
-    
+
     # Filter out custom parameters that aren't part of FHIR standard
     fhir_params = {}
     if params:
