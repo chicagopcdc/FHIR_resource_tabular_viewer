@@ -19,6 +19,15 @@ class AggregateResponse(BaseModel):
     build_time_ms: int = Field(..., description="Time taken to build dataset in milliseconds")
     cache_hit: bool = Field(default=False, description="Whether response was served from cache")
 
+class ColumnDefinition(BaseModel):
+    """Lightweight column metadata for aggregate dataset schemas"""
+    name: str = Field(..., description="Display-friendly column name")
+    path: str = Field(..., description="Flattened path used to access the value")
+    inferred_type: str = Field(..., description="Logical type inferred from sample values")
+    nullable: bool = Field(..., description="Whether the column is missing in sampled resources")
+    repeated: bool = Field(..., description="Whether the column originates from repeated FHIR content")
+    example_values: List[str] = Field(default_factory=list, description="Example values from sampled resources")
+
 class SliceRequest(BaseModel):
     """Request model for getting dataset slice"""
     offset: int = Field(default=0, ge=0, description="Starting offset for pagination slice")
@@ -48,6 +57,30 @@ class ProgressResponse(BaseModel):
     completed_at: Optional[str] = Field(None, description="ISO timestamp when build completed")
     error_message: Optional[str] = Field(None, description="Error message if status is error")
     truncated: bool = Field(default=False, description="Whether dataset was truncated")
+
+class DatasetProfileResponse(BaseModel):
+    """Response model for aggregate dataset profile metadata"""
+    success: bool = Field(default=True)
+    dataset_id: str = Field(..., description="Dataset identifier")
+    source_id: str = Field(..., description="Source/server identifier used to build the dataset")
+    resource_type: str = Field(..., description="FHIR resource type in the dataset")
+    status: str = Field(..., description="Current status: building, ready, error, truncated")
+    progress_percent: int = Field(..., description="Completion percentage (0-100)")
+    total_records: int = Field(..., description="Total records in the dataset snapshot")
+    truncated: bool = Field(default=False, description="Whether the dataset hit configured caps")
+    build_time_ms: int = Field(..., description="Elapsed build time in milliseconds")
+    created_at: Optional[str] = Field(None, description="ISO timestamp when the dataset was created")
+    warnings: List[str] = Field(default_factory=list, description="Non-fatal dataset warnings")
+
+class DatasetSchemaResponse(BaseModel):
+    """Response model for inferred aggregate dataset schema"""
+    success: bool = Field(default=True)
+    dataset_id: str = Field(..., description="Dataset identifier")
+    resource_type: str = Field(..., description="FHIR resource type in the dataset")
+    flatten_profile: str = Field(default="default", description="Flattening profile used for schema inference")
+    columns: List[ColumnDefinition] = Field(default_factory=list, description="Inferred column definitions")
+    sampled_records: int = Field(default=0, description="Number of sampled records used for schema inference")
+    warnings: List[str] = Field(default_factory=list, description="Non-fatal schema inference warnings")
 
 class ErrorResponse(BaseModel):
     """Error response model"""
