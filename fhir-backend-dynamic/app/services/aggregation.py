@@ -4,7 +4,9 @@ Implements complete dataset fetching following FHIR Bundle.link pagination
 """
 
 import asyncio
+import json
 import logging
+import re
 import time
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
@@ -13,6 +15,7 @@ from urllib.parse import urlencode
 from app.services import fhir
 from app.services.http import get_json
 from app.services.cache_manager import get_cache_manager
+from app.services.schema import infer_columns, analyze_sample_values
 from app.config import config
 
 logger = logging.getLogger(__name__)
@@ -76,6 +79,8 @@ class AggregationProgress:
 
 class AggregationService:
     """Service for building and managing aggregated FHIR resource datasets"""
+
+    SCHEMA_SAMPLE_SIZE = 25
     
     def __init__(self):
         self.cache_manager = get_cache_manager()
@@ -119,19 +124,24 @@ class AggregationService:
             resources, truncated = await self._fetch_all_resources(
                 resource_type, search_params, progress
             )
+
+            progress.complete(len(resources), truncated)
             
             # Store in cache
             dataset = {
                 "dataset_id": dataset_id,
+                "source_id": server_id,
                 "resource_type": resource_type,
                 "resources": resources,
                 "search_params": search_params,
-                "created_at": datetime.now().isoformat(),
-                "truncated": truncated
+                "created_at": progress.started_at.isoformat(),
+                "truncated": truncated,
+                "status": progress.status,
+                "build_time_ms": progress.build_time_ms,
+                "warnings": []
             }
             
             await self.cache_manager.store_dataset(cache_key, dataset, config.cache_ttl_seconds)
-            progress.complete(len(resources), truncated)
             
             logger.info(f"Dataset build complete: {dataset_id} ({len(resources)} resources, "
                        f"{progress.build_time_ms}ms, truncated={truncated})")
@@ -152,19 +162,7 @@ class AggregationService:
     async def get_dataset_slice(self, dataset_id: str, offset: int, limit: int, 
                                user_id: str) -> Dict[str, Any]:
         """Get paginated slice of cached dataset"""
-        
-        # Find dataset in cache by scanning user's datasets
-        cache_keys = await self.cache_manager.get_user_datasets(user_id)
-        dataset = None
-        
-        for cache_key in cache_keys:
-            cached = await self.cache_manager.get_dataset(cache_key)
-            if cached and cached["dataset_id"] == dataset_id:
-                dataset = cached
-                break
-        
-        if not dataset:
-            raise ValueError(f"Dataset not found: {dataset_id}")
+        dataset = await self._get_dataset_record(dataset_id, user_id)
         
         resources = dataset["resources"]
         total = len(resources)
@@ -186,6 +184,73 @@ class AggregationService:
             "has_prev": offset > 0,
             "truncated": dataset.get("truncated", False)
         }
+
+    async def get_dataset_profile(self, dataset_id: str, user_id: str) -> Dict[str, Any]:
+        """Return proposal-aligned metadata for a cached aggregate dataset."""
+        dataset = await self._get_dataset_record(dataset_id, user_id)
+        progress = self.progress_tracking.get(dataset_id)
+
+        status = dataset.get("status") or ("truncated" if dataset.get("truncated", False) else "ready")
+        progress_percent = 100
+        build_time_ms = dataset.get("build_time_ms", 0)
+
+        if progress:
+            progress_data = progress.to_dict()
+            status = progress_data.get("status", status)
+            build_time_ms = progress_data.get("build_time_ms", build_time_ms)
+            progress_percent = progress_data.get("progress_percent", progress_percent)
+
+        if status != "building":
+            progress_percent = 100
+
+        return {
+            "success": True,
+            "dataset_id": dataset_id,
+            "source_id": dataset.get("source_id", "default"),
+            "resource_type": dataset["resource_type"],
+            "status": status,
+            "progress_percent": progress_percent,
+            "total_records": len(dataset["resources"]),
+            "truncated": dataset.get("truncated", False),
+            "build_time_ms": build_time_ms,
+            "created_at": dataset.get("created_at"),
+            "warnings": dataset.get("warnings", [])
+        }
+
+    async def get_dataset_schema(self, dataset_id: str, user_id: str) -> Dict[str, Any]:
+        """Infer a lightweight schema summary for a cached aggregate dataset."""
+        dataset = await self._get_dataset_record(dataset_id, user_id)
+        resources = dataset.get("resources", [])
+
+        if not resources:
+            return {
+                "success": True,
+                "dataset_id": dataset_id,
+                "resource_type": dataset["resource_type"],
+                "flatten_profile": "default",
+                "columns": [],
+                "sampled_records": 0,
+                "warnings": [f"No cached {dataset['resource_type']} resources are available for schema inference."]
+            }
+
+        sampled_resources = resources[:self.SCHEMA_SAMPLE_SIZE]
+        column_paths = infer_columns(sampled_resources, max_paths=200)
+        warnings = []
+
+        if len(resources) > len(sampled_resources):
+            warnings.append(
+                f"Schema inferred from the first {len(sampled_resources)} resources out of {len(resources)} cached resources."
+            )
+
+        return {
+            "success": True,
+            "dataset_id": dataset_id,
+            "resource_type": dataset["resource_type"],
+            "flatten_profile": "default",
+            "columns": [self._build_column_definition(sampled_resources, path) for path in column_paths],
+            "sampled_records": len(sampled_resources),
+            "warnings": warnings
+        }
     
     async def get_progress(self, dataset_id: str) -> Optional[Dict[str, Any]]:
         """Get progress information for dataset build"""
@@ -204,6 +269,86 @@ class AggregationService:
                 return True
         
         return False
+
+    async def _get_dataset_record(self, dataset_id: str, user_id: str) -> Dict[str, Any]:
+        """Find a cached dataset record for the given user."""
+        cache_keys = await self.cache_manager.get_user_datasets(user_id)
+
+        for cache_key in cache_keys:
+            cached = await self.cache_manager.get_dataset(cache_key)
+            if cached and cached["dataset_id"] == dataset_id:
+                return cached
+
+        raise ValueError(f"Dataset not found: {dataset_id}")
+
+    def _build_column_definition(self, resources: List[Dict[str, Any]], path: str) -> Dict[str, Any]:
+        """Build a stable column metadata object from sampled resources."""
+        analysis = analyze_sample_values(resources, path)
+        sample_values = analysis.get("sample_values", [])
+
+        example_values: List[str] = []
+        seen = set()
+        for value in sample_values:
+            rendered = self._stringify_sample_value(value)
+            if rendered and rendered not in seen:
+                seen.add(rendered)
+                example_values.append(rendered)
+            if len(example_values) >= 3:
+                break
+
+        return {
+            "name": path,
+            "path": path,
+            "inferred_type": self._infer_logical_type(sample_values, path),
+            "nullable": analysis.get("sample_count", 0) < len(resources),
+            "repeated": "[" in path or any(isinstance(value, list) for value in sample_values),
+            "example_values": example_values
+        }
+
+    def _infer_logical_type(self, sample_values: List[Any], path: str) -> str:
+        """Infer a coarse logical type for a sampled column."""
+        non_null_values = [value for value in sample_values if value is not None]
+
+        if not non_null_values:
+            return "date" if self._looks_like_date_path(path) else "string"
+        if any(isinstance(value, list) for value in non_null_values):
+            return "array"
+        if any(isinstance(value, dict) for value in non_null_values):
+            return "object"
+        if all(isinstance(value, bool) for value in non_null_values):
+            return "boolean"
+        if all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in non_null_values):
+            return "number"
+        if all(isinstance(value, str) for value in non_null_values):
+            if all(self._looks_like_date_value(value) for value in non_null_values):
+                return "date"
+
+        return "date" if self._looks_like_date_path(path) else "string"
+
+    def _looks_like_date_path(self, path: str) -> bool:
+        """Use common FHIR date/time field names as a fallback type hint."""
+        return any(token in path.lower() for token in ("date", "time", "issued", "effective", "recorded"))
+
+    def _looks_like_date_value(self, value: str) -> bool:
+        """Check whether a string resembles a FHIR date or datetime."""
+        candidate = value.strip()
+        if not candidate:
+            return False
+
+        if re.fullmatch(r"\d{4}(-\d{2}){0,2}", candidate):
+            return True
+
+        try:
+            datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+            return True
+        except ValueError:
+            return False
+
+    def _stringify_sample_value(self, value: Any) -> str:
+        """Convert example values to stable strings for API responses."""
+        if isinstance(value, (dict, list)):
+            return json.dumps(value, sort_keys=True)
+        return str(value)
     
     async def _fetch_all_resources(self, resource_type: str, search_params: Dict[str, Any],
                                   progress: AggregationProgress) -> Tuple[List[Dict], bool]:

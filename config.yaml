@@ -100,7 +100,7 @@ backend:
 
   # Aggregate Dataset Configuration
   aggregate:
-    enabled: false                    # TEMPORARILY DISABLED - causing issues
+    enabled: true
     max_records: 200000              # Safety cap per dataset
     page_count_hint: 100             # Hint for FHIR server _count parameter
     max_build_time_seconds: 300      # Timeout for long aggregations

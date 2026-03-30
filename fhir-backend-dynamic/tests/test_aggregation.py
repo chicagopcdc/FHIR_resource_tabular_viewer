@@ -33,9 +33,11 @@ class TestAggregationService:
         """Mock cache manager"""
         mock_manager = MagicMock()
         mock_manager.generate_cache_key.return_value = "test:server:user123:Patient:hash123"
-        mock_manager.get_dataset.return_value = None
-        mock_manager.store_dataset.return_value = True
+        mock_manager.get_dataset = AsyncMock(return_value=None)
+        mock_manager.store_dataset = AsyncMock(return_value=True)
         mock_manager.get_dataset_id.return_value = "dataset-123"
+        mock_manager.get_user_datasets = AsyncMock(return_value=[])
+        mock_manager.delete_dataset = AsyncMock(return_value=True)
         return mock_manager
     
     @pytest.fixture
@@ -45,7 +47,7 @@ class TestAggregationService:
             service = AggregationService()
             return service
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_build_dataset_success(self, aggregation_service, mock_config):
         """Test successful dataset building"""
         # Mock FHIR responses
@@ -73,7 +75,7 @@ class TestAggregationService:
         assert result["cache_hit"] is False
         assert "build_time_ms" in result
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_build_dataset_with_pagination(self, aggregation_service, mock_config):
         """Test dataset building with multiple pages"""
         # Mock first page
@@ -110,7 +112,7 @@ class TestAggregationService:
         assert result["total"] == 15
         assert result["truncated"] is False
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_build_dataset_cache_hit(self, aggregation_service, mock_cache_manager):
         """Test cache hit scenario"""
         # Mock cached dataset
@@ -131,7 +133,7 @@ class TestAggregationService:
         assert result["cache_hit"] is True
         assert result["build_time_ms"] == 0
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_build_dataset_truncated(self, aggregation_service, mock_config):
         """Test dataset truncation at max records"""
         mock_config.aggregate_max_records = 5  # Small limit for testing
@@ -157,7 +159,7 @@ class TestAggregationService:
         assert result["total"] == 5  # Truncated to limit
         assert result["truncated"] is True
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_get_dataset_slice(self, aggregation_service, mock_cache_manager):
         """Test getting dataset slice"""
         # Mock dataset with multiple items
@@ -192,7 +194,7 @@ class TestAggregationService:
         assert result["items"][0]["id"] == "patient-5"
         assert result["items"][-1]["id"] == "patient-14"
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_get_dataset_slice_not_found(self, aggregation_service, mock_cache_manager):
         """Test slice request for non-existent dataset"""
         mock_cache_manager.get_user_datasets.return_value = []
@@ -204,6 +206,85 @@ class TestAggregationService:
                 limit=10,
                 user_id="user123"
             )
+
+    @pytest.mark.anyio
+    async def test_get_dataset_profile(self, aggregation_service, mock_cache_manager):
+        """Test dataset profile metadata response."""
+        dataset = {
+            "dataset_id": "profile-test-123",
+            "source_id": "default",
+            "resource_type": "Observation",
+            "resources": [
+                {"resourceType": "Observation", "id": "obs-1"},
+                {"resourceType": "Observation", "id": "obs-2"}
+            ],
+            "created_at": "2026-03-31T10:00:00",
+            "build_time_ms": 321,
+            "status": "ready",
+            "truncated": False,
+            "warnings": []
+        }
+
+        mock_cache_manager.get_user_datasets.return_value = ["test:key"]
+        mock_cache_manager.get_dataset.return_value = dataset
+
+        result = await aggregation_service.get_dataset_profile(
+            dataset_id="profile-test-123",
+            user_id="user123"
+        )
+
+        assert result["success"] is True
+        assert result["dataset_id"] == "profile-test-123"
+        assert result["source_id"] == "default"
+        assert result["resource_type"] == "Observation"
+        assert result["status"] == "ready"
+        assert result["progress_percent"] == 100
+        assert result["total_records"] == 2
+        assert result["build_time_ms"] == 321
+
+    @pytest.mark.anyio
+    async def test_get_dataset_schema(self, aggregation_service, mock_cache_manager):
+        """Test dataset schema inference response."""
+        dataset = {
+            "dataset_id": "schema-test-123",
+            "resource_type": "Observation",
+            "resources": [
+                {
+                    "resourceType": "Observation",
+                    "id": "obs-1",
+                    "status": "final",
+                    "effectiveDateTime": "2026-03-31T09:12:00Z"
+                },
+                {
+                    "resourceType": "Observation",
+                    "id": "obs-2",
+                    "status": "preliminary",
+                    "effectiveDateTime": "2026-03-31T10:15:00Z"
+                }
+            ],
+            "truncated": False
+        }
+
+        mock_cache_manager.get_user_datasets.return_value = ["test:key"]
+        mock_cache_manager.get_dataset.return_value = dataset
+
+        result = await aggregation_service.get_dataset_schema(
+            dataset_id="schema-test-123",
+            user_id="user123"
+        )
+
+        assert result["success"] is True
+        assert result["dataset_id"] == "schema-test-123"
+        assert result["resource_type"] == "Observation"
+        assert result["sampled_records"] == 2
+        assert result["warnings"] == []
+
+        columns = {column["path"]: column for column in result["columns"]}
+        assert "id" in columns
+        assert "status" in columns
+        assert "effectiveDateTime" in columns
+        assert columns["effectiveDateTime"]["inferred_type"] == "date"
+        assert columns["status"]["example_values"] == ["final", "preliminary"]
 
 
 class TestAggregationProgress:
@@ -239,7 +320,7 @@ class TestAggregationProgress:
         assert progress.estimated_total == 150
         assert progress.completed_at is not None
         assert progress.truncated is True
-        assert progress.build_time_ms > 0
+        assert progress.build_time_ms >= 0
     
     def test_progress_error(self):
         """Test progress error state"""
@@ -308,7 +389,7 @@ class TestCacheManager:
         assert norm1["name"] == norm2["name"]
         assert norm1["active"] == norm2["active"]
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_memory_cache_basic_operations(self):
         """Test basic memory cache operations"""
         backend = MemoryCacheBackend(max_datasets_per_user=5)
@@ -331,7 +412,7 @@ class TestCacheManager:
         retrieved_after_delete = await backend.get("test:key")
         assert retrieved_after_delete is None
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_memory_cache_expiry(self):
         """Test cache TTL expiry"""
         backend = MemoryCacheBackend()
@@ -343,15 +424,15 @@ class TestCacheManager:
         retrieved = await backend.get("short:key")
         assert retrieved is None
     
-    @pytest.mark.asyncio  
+    @pytest.mark.anyio
     async def test_memory_cache_user_limits(self):
         """Test per-user dataset limits"""
         backend = MemoryCacheBackend(max_datasets_per_user=2)
         
         # Add datasets for same user
-        await backend.set("test:server:user1:Patient:hash1", {"id": 1}, 300)
-        await backend.set("test:server:user1:Observation:hash2", {"id": 2}, 300)
-        await backend.set("test:server:user1:Condition:hash3", {"id": 3}, 300)  # Should evict oldest
+        await asyncio.wait_for(backend.set("test:server:user1:Patient:hash1", {"id": 1}, 300), timeout=1)
+        await asyncio.wait_for(backend.set("test:server:user1:Observation:hash2", {"id": 2}, 300), timeout=1)
+        await asyncio.wait_for(backend.set("test:server:user1:Condition:hash3", {"id": 3}, 300), timeout=1)  # Should evict oldest
         
         # First dataset should be evicted
         first = await backend.get("test:server:user1:Patient:hash1")

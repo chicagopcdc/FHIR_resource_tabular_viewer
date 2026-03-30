@@ -90,7 +90,7 @@ class MemoryCacheBackend(CacheBackend):
     
     async def get_keys_for_user(self, user_id: str) -> List[str]:
         async with self._lock:
-            return [key for key in self._cache.keys() if self._extract_user_from_key(key) == user_id]
+            return self._get_keys_for_user_unlocked(user_id)
     
     async def clear_expired(self) -> int:
         async with self._lock:
@@ -117,15 +117,19 @@ class MemoryCacheBackend(CacheBackend):
         """Extract user ID from cache key format: env:serverId:userId:resourceType:filterHash"""
         parts = key.split(":")
         return parts[2] if len(parts) >= 3 else None
+
+    def _get_keys_for_user_unlocked(self, user_id: str) -> List[str]:
+        """Get user-specific cache keys while the caller holds the lock."""
+        return [key for key in self._cache.keys() if self._extract_user_from_key(key) == user_id]
     
     async def _enforce_user_limits(self, user_id: str):
         """Enforce max datasets per user using LRU eviction"""
-        user_keys = await self.get_keys_for_user(user_id)
+        user_keys = self._get_keys_for_user_unlocked(user_id)
         
         if len(user_keys) >= self.max_datasets_per_user:
             # Sort by access time, evict oldest
             user_keys.sort(key=lambda k: self._access_order.get(k, datetime.min))
-            keys_to_remove = user_keys[:-self.max_datasets_per_user + 1]
+            keys_to_remove = user_keys[:len(user_keys) - self.max_datasets_per_user + 1]
             
             for key in keys_to_remove:
                 await self._remove_key(key)

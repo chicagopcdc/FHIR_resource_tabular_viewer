@@ -11,7 +11,8 @@ from app.config import config
 from app.services.aggregation import get_aggregation_service
 from app.models.aggregate import (
     AggregateRequest, AggregateResponse, SliceRequest, SliceResponse,
-    ProgressResponse, ErrorResponse, DeleteResponse
+    ProgressResponse, ErrorResponse, DeleteResponse,
+    DatasetProfileResponse, DatasetSchemaResponse
 )
 
 router = APIRouter(prefix="/aggregate", tags=["aggregate"])
@@ -109,6 +110,58 @@ async def get_dataset_progress(
     except Exception as e:
         logger.error(f"Failed to get progress for dataset {dataset_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Progress retrieval failed: {str(e)}")
+
+@router.get("/{dataset_id}/profile", response_model=DatasetProfileResponse)
+async def get_dataset_profile(
+    dataset_id: str,
+    user_session: str = Query(..., description="User session identifier"),
+    _: None = Depends(check_aggregate_enabled)
+):
+    """
+    Get dataset-level metadata for a cached aggregate dataset.
+    Returns status, counts, timing, and source identifiers for the dataset.
+    """
+    try:
+        aggregation_service = get_aggregation_service()
+        result = await aggregation_service.get_dataset_profile(
+            dataset_id=dataset_id,
+            user_id=user_session
+        )
+
+        return DatasetProfileResponse(**result)
+
+    except ValueError as e:
+        logger.warning(f"Dataset not found: {dataset_id}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to get dataset profile {dataset_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Profile retrieval failed: {str(e)}")
+
+@router.get("/{dataset_id}/schema", response_model=DatasetSchemaResponse)
+async def get_dataset_schema(
+    dataset_id: str,
+    user_session: str = Query(..., description="User session identifier"),
+    _: None = Depends(check_aggregate_enabled)
+):
+    """
+    Get inferred schema metadata for a cached aggregate dataset.
+    Returns lightweight column definitions derived from sampled cached resources.
+    """
+    try:
+        aggregation_service = get_aggregation_service()
+        result = await aggregation_service.get_dataset_schema(
+            dataset_id=dataset_id,
+            user_id=user_session
+        )
+
+        return DatasetSchemaResponse(**result)
+
+    except ValueError as e:
+        logger.warning(f"Dataset not found: {dataset_id}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to get dataset schema {dataset_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Schema retrieval failed: {str(e)}")
 
 @router.delete("/{dataset_id}", response_model=DeleteResponse)
 async def delete_dataset(
