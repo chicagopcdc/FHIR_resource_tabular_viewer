@@ -1,25 +1,23 @@
-FROM node:18
-
-# Set the working directory
+# --- Stage 1: Base (shared dependencies) ---
+FROM node:24-alpine AS base
 WORKDIR /app
-
-# Copy package.json and package-lock.json
 COPY package*.json ./
-
-# Install dependencies
-RUN npm install
-
-# Copy the rest of the application code
+RUN npm install --legacy-peer-deps
 COPY . .
 
-# Build the application
+# --- Stage 2: Development (Vite HMR) ---
+FROM base AS dev
+EXPOSE 3000
+CMD ["npm", "run", "dev"]
+
+# --- Stage 3: Build ---
+FROM base AS build
 RUN npm run build
 
-# Install serve to serve the build folder
+# --- Stage 4: Production (serve static files) ---
+FROM node:24-alpine AS prod
+WORKDIR /app
 RUN npm install -g serve
-
-# Expose the port the app runs on
+COPY --from=build /app/dist ./dist
 EXPOSE 3000
-
-# Command to run the application
-CMD ["serve", "-s", "build"]
+CMD ["serve", "-s", "dist", "-l", "3000"]

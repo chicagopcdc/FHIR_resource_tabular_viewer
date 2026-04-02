@@ -77,8 +77,8 @@ def _cache_response(cache_key: str, response: Dict):
         _cache_expiry[cache_key] = datetime.now() + CACHE_DURATION
         logger.info(f"Cached response for {cache_key}")
         
-        # Clean up old cache entries (keep max 10 entries)
-        if len(_patient_cache) > 10:
+        # Clean up old cache entries (keep max config.max_cache_entries entries)
+        if len(_patient_cache) > config.max_cache_entries:
             oldest_key = min(_cache_expiry.keys(), key=lambda k: _cache_expiry[k])
             _patient_cache.pop(oldest_key, None)
             _cache_expiry.pop(oldest_key, None)
@@ -1303,7 +1303,7 @@ async def get_patients_with_global_filters(
                 birth_date = patient.get('birthDate')
                 if birth_date:
                     try:
-                        age = 2024 - int(birth_date[:4])
+                        age = datetime.now().year - int(birth_date[:4])
                         if ((age_min is None or age >= age_min) and 
                             (age_max is None or age <= age_max)):
                             age_filtered.append(patient)
@@ -2349,36 +2349,45 @@ async def get_patient_facets(
         patients = [r for r in all_resources if r.get("resourceType") == "Patient"]
         patient_ids = [p.get("id") for p in patients if p.get("id")]
         
-        # Manually check for resources for each patient - start with DiagnosticReport since we know it exists
+        # Resource types to count via _summary=count (one concurrent request each)
+        resource_types_to_count = [
+            "DiagnosticReport", "Observation", "Condition", "Procedure",
+            "MedicationRequest", "Encounter", "DocumentReference",
+            "AllergyIntolerance", "Immunization"
+        ]
+
+        async def _count_resource(resource_type: str) -> tuple[str, int]:
+            """Fetch total count for a resource type using _summary=count"""
+            try:
+                rt_url = base_url + resource_type
+                count_bundle = await fhir.fetch_bundle_with_deferred_handling(
+                    rt_url, {"_summary": "count", "_count": "0"}
+                )
+                total = count_bundle.get("total", 0) if isinstance(count_bundle, dict) else 0
+                return resource_type, total
+            except Exception as exc:
+                logger.warning(f"Could not count {resource_type}: {exc}")
+                return resource_type, 0
+
+        count_results = await asyncio.gather(
+            *[_count_resource(rt) for rt in resource_types_to_count]
+        )
+
         facets = {
             "has_resource_counts": {
-                "has_DiagnosticReport": 0,
-                "has_Observation": 0,
-                "has_Condition": 0,
-                "has_Procedure": 0,
-                "has_MedicationRequest": 0,
-                "has_Encounter": 0,
-                "has_DocumentReference": 0,
-                "has_AllergyIntolerance": 0,
-                "has_Immunization": 0
+                f"has_{rt}": count for rt, count in count_results
             },
             "condition_codes": [],
             "observation_codes": []
         }
-        
-        # For demo purposes, show some known data
-        # In production, you'd want to optimize this with proper caching or database aggregations
-        facets["has_resource_counts"]["has_DiagnosticReport"] = 2  # We know 1208 and 1200 have data
-        facets["has_resource_counts"]["has_Observation"] = 1      # Some patients may have observations
-        facets["has_resource_counts"]["has_Condition"] = 1       # Some patients may have conditions
-        
+
         logger.info(f"Computed facets for {len(patients)} patients with {len(patient_ids)} IDs")
-        
+
         return {
             "success": True,
             "facets": facets,
             "patient_count": len(patients),
-            "total_resources": len(all_resources) - len(patients)  # Subtract patients from total
+            "total_resources": len(all_resources) - len(patients)
         }
         
     except Exception as e:

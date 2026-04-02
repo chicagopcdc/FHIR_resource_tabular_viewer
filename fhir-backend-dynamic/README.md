@@ -64,3 +64,15 @@ curl "http://localhost:8000/api/servers/{serverId}/references/resolve?ref=Patien
 - Allowed search params derive from the server's CapabilityStatement.
 - Flattening depth and array fan-out are bounded to protect performance.
 - Simple rate-limiting is included to avoid overwhelming the upstream server.
+
+## Running with Docker
+
+This backend includes a `Dockerfile` and a `docker-compose.yml` for containerized execution.
+
+### Build and Run Standalone
+To build and run the backend using Docker Compose in this directory (with no cache):
+```bash
+docker compose build --no-cache
+docker compose up -d
+```
+The FastAPI application will be accessible at `http://localhost:8000`.

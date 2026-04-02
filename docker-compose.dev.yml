@@ -1,0 +1,27 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: fhir-backend-dynamic/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./fhir-backend-dynamic:/app
+      - ./config.yaml:/config.yaml:ro
+
+  frontend:
+    build:
+      context: .
+      target: dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_TARGET=http://backend:8000
+      - CHOKIDAR_USEPOLLING=true
