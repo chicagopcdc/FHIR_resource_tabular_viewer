@@ -8,6 +8,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import Header from "./Header";
+import LocalFileViewer from "./LocalFileViewer";
 import DynamicFilterSidebar from "./DynamicFilterSidebar";
 import PatientTable from "./PatientTable";
 import PatientDetails from "./PatientDetails";
@@ -997,6 +998,18 @@ const MainPage = () => {
         currentDateTime={getCurrentDateTime()}
       />
 
+      <div style={{ padding: "0.5rem 1.5rem", background: "white", borderBottom: "1px solid #e0e0e0" }}>
+        <button
+          onClick={() => navigate("/local")}
+          style={{
+            background: "none", border: "1px solid #007bff", color: "#007bff",
+            padding: "0.4rem 0.9rem", borderRadius: 4, cursor: "pointer", fontSize: "0.85rem", fontWeight: 500,
+          }}
+        >
+          📁 Load from local file
+        </button>
+      </div>
+
       <div className="app-layout">
         {viewMode === "patients" && (
           <DynamicFilterSidebar
@@ -1271,6 +1284,7 @@ function App() {
             path="/patient/:patientId"
             element={<PatientDetailsWrapper />}
           />
+          <Route path="/local" element={<LocalFileViewer />} />
         </Routes>
       </div>
     </Router>
