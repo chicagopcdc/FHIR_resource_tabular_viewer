@@ -7,15 +7,29 @@ tabular viewer can consume either origin.
 """
 
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, File, UploadFile, Query
+from pydantic import BaseModel, Field
 
 from app.services.sources import registry as source_registry
 from app.services.sources.local_file import LocalFileSource
+from app.services.sources.s3_file import S3FileSource, S3Settings, S3Error
 from app.services.sources.store import FhirParseError
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 logger = logging.getLogger(__name__)
+
+
+class S3LoadRequest(BaseModel):
+    """Body for loading a FHIR object directly from S3."""
+
+    uri: str = Field(..., description="s3://bucket/key URI of the FHIR object")
+    region: Optional[str] = None
+    endpoint_url: Optional[str] = Field(None, description="Custom endpoint, e.g. MinIO/LocalStack")
+    access_key_id: Optional[str] = None
+    secret_access_key: Optional[str] = None
+    session_token: Optional[str] = None
 
 
 @router.post("/upload")
@@ -45,6 +59,43 @@ async def upload_source(file: UploadFile = File(...)):
         "Loaded source %s from %s (%d resources, %d types)",
         metadata["source_id"], file.filename, metadata["total"],
         len(metadata["resource_types"]),
+    )
+    return {"success": True, "data": metadata}
+
+
+@router.post("/s3")
+async def load_s3_source(body: S3LoadRequest):
+    """Load a FHIR object directly from S3 (``s3://bucket/key``).
+
+    Credentials fall back to the standard AWS chain when not supplied. Same
+    response shape as ``/upload``.
+    """
+    settings = S3Settings(
+        region=body.region,
+        endpoint_url=body.endpoint_url,
+        access_key_id=body.access_key_id,
+        secret_access_key=body.secret_access_key,
+        session_token=body.session_token,
+    )
+    try:
+        loader = S3FileSource.from_s3(body.uri, settings=settings)
+    except FhirParseError as exc:
+        # NOTE: FhirParseError subclasses ValueError, so it must be caught first.
+        raise HTTPException(status_code=422, detail=str(exc))
+    except ValueError as exc:
+        # Malformed s3:// URI.
+        raise HTTPException(status_code=400, detail=str(exc))
+    except S3Error as exc:
+        # Fetch/auth failure talking to S3.
+        raise HTTPException(status_code=502, detail=str(exc))
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.exception("Unexpected error loading S3 source %s", body.uri)
+        raise HTTPException(status_code=500, detail=f"Failed to load S3 object: {exc}")
+
+    metadata = source_registry.add_source(loader, name=body.uri)
+    logger.info(
+        "Loaded S3 source %s from %s (%d resources)",
+        metadata["source_id"], body.uri, metadata["total"],
     )
     return {"success": True, "data": metadata}
 
