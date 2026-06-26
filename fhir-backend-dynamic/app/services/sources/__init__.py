@@ -17,12 +17,19 @@ Future implementations (e.g. S3-backed) only need to satisfy the same
 """
 
 from app.services.sources.base import SourceLoader
+from app.services.sources.memory_source import InMemoryStoreSource
 from app.services.sources.local_file import LocalFileSource
+from app.services.sources.s3_file import S3FileSource, S3Settings, S3Error, parse_s3_uri
 from app.services.sources.store import InMemoryFhirStore, FhirParseError
 
 __all__ = [
     "SourceLoader",
+    "InMemoryStoreSource",
     "LocalFileSource",
+    "S3FileSource",
+    "S3Settings",
+    "S3Error",
+    "parse_s3_uri",
     "InMemoryFhirStore",
     "FhirParseError",
 ]
