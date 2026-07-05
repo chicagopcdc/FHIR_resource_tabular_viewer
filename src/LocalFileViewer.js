@@ -5,7 +5,7 @@
 // so the table matches the rest of the app.
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Upload, FileJson, Trash2, X, ArrowLeft } from "lucide-react";
+import { Upload, FileJson, Trash2, X, ArrowLeft, Cloud } from "lucide-react";
 import { flattenResource, displayValue } from "./api";
 import * as sourcesApi from "./services/sourcesApi";
 
@@ -22,6 +22,15 @@ function LocalFileViewer() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null); // raw resource for drill-down
+
+  // S3 load form state
+  const [s3Open, setS3Open] = useState(false);
+  const [s3Uri, setS3Uri] = useState("");
+  const [s3Advanced, setS3Advanced] = useState(false);
+  const [s3Region, setS3Region] = useState("");
+  const [s3Endpoint, setS3Endpoint] = useState("");
+  const [s3AccessKey, setS3AccessKey] = useState("");
+  const [s3Secret, setS3Secret] = useState("");
 
   const loadType = useCallback(
     async (sourceId, resourceType, nextOffset = 0) => {
@@ -48,14 +57,15 @@ function LocalFileViewer() {
     []
   );
 
-  const handleUpload = useCallback(
-    async (file) => {
-      if (!file) return;
+  // Shared post-load: adopt source metadata and open its first resource type.
+  // `loader` returns the source metadata (from upload or S3).
+  const adoptSource = useCallback(
+    async (loader) => {
       setLoading(true);
       setError(null);
       setSelected(null);
       try {
-        const meta = await sourcesApi.uploadSource(file);
+        const meta = await loader();
         setSource(meta);
         const firstType = meta.resource_types?.[0];
         if (firstType) {
@@ -74,6 +84,29 @@ function LocalFileViewer() {
     },
     [loadType]
   );
+
+  const handleUpload = useCallback(
+    (file) => {
+      if (!file) return;
+      adoptSource(() => sourcesApi.uploadSource(file));
+    },
+    [adoptSource]
+  );
+
+  const handleS3Load = useCallback(() => {
+    if (!s3Uri.trim()) {
+      setError("Enter an s3://bucket/key URI.");
+      return;
+    }
+    const body = { uri: s3Uri.trim() };
+    if (s3Advanced) {
+      if (s3Region.trim()) body.region = s3Region.trim();
+      if (s3Endpoint.trim()) body.endpoint_url = s3Endpoint.trim();
+      if (s3AccessKey.trim()) body.access_key_id = s3AccessKey.trim();
+      if (s3Secret.trim()) body.secret_access_key = s3Secret.trim();
+    }
+    adoptSource(() => sourcesApi.loadS3Source(body));
+  }, [adoptSource, s3Uri, s3Advanced, s3Region, s3Endpoint, s3AccessKey, s3Secret]);
 
   const handleUnload = useCallback(async () => {
     if (source) {
@@ -122,11 +155,11 @@ function LocalFileViewer() {
           <ArrowLeft size={16} /> Back
         </Link>
         <h1 style={{ fontSize: "1.4rem", fontWeight: 600, margin: 0, color: "#333" }}>
-          Local File Viewer
+          File & S3 Viewer
         </h1>
       </div>
       <p style={{ color: "#666", marginTop: 0 }}>
-        Upload a FHIR resource, Bundle, JSON array, or NDJSON file to explore it as a table.
+        Load a FHIR resource, Bundle, JSON array, or NDJSON from a local file or an S3 object, and explore it as a table.
       </p>
 
       {/* Upload control */}
@@ -165,6 +198,69 @@ function LocalFileViewer() {
         >
           Choose file
         </button>
+      </div>
+
+      {/* S3 load */}
+      <div style={{ border: "1px solid #e0e0e0", borderRadius: 8, marginBottom: "1.5rem" }}>
+        <button
+          onClick={() => setS3Open((v) => !v)}
+          style={{
+            width: "100%", display: "flex", alignItems: "center", gap: 8, background: "none",
+            border: "none", padding: "0.9rem 1rem", cursor: "pointer", fontWeight: 500, color: "#333",
+          }}
+        >
+          <Cloud size={18} color="#007bff" />
+          Load from Amazon S3
+          <span style={{ marginLeft: "auto", color: "#888" }}>{s3Open ? "▲" : "▼"}</span>
+        </button>
+        {s3Open && (
+          <div style={{ padding: "0 1rem 1rem", display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="text"
+                value={s3Uri}
+                onChange={(e) => setS3Uri(e.target.value)}
+                placeholder="s3://my-bucket/path/to/data.json"
+                onKeyDown={(e) => e.key === "Enter" && handleS3Load()}
+                style={{ flex: 1, padding: "0.5rem", border: "1px solid #ccc", borderRadius: 4, fontSize: "0.9rem" }}
+              />
+              <button
+                onClick={handleS3Load}
+                style={{ background: "#007bff", color: "white", border: "none", padding: "0.5rem 1.25rem", borderRadius: 4, cursor: "pointer", fontWeight: 500 }}
+              >
+                Load
+              </button>
+            </div>
+            <button
+              onClick={() => setS3Advanced((v) => !v)}
+              style={{ alignSelf: "flex-start", background: "none", border: "none", color: "#007bff", cursor: "pointer", fontSize: "0.8rem", padding: 0 }}
+            >
+              {s3Advanced ? "Hide" : "Show"} connection options
+            </button>
+            {s3Advanced && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {[
+                  ["Region (optional)", s3Region, setS3Region, "text"],
+                  ["Endpoint URL (optional, e.g. MinIO)", s3Endpoint, setS3Endpoint, "text"],
+                  ["Access key ID (optional)", s3AccessKey, setS3AccessKey, "text"],
+                  ["Secret access key (optional)", s3Secret, setS3Secret, "password"],
+                ].map(([ph, val, setter, type]) => (
+                  <input
+                    key={ph}
+                    type={type}
+                    value={val}
+                    onChange={(e) => setter(e.target.value)}
+                    placeholder={ph}
+                    style={{ padding: "0.5rem", border: "1px solid #ccc", borderRadius: 4, fontSize: "0.85rem" }}
+                  />
+                ))}
+              </div>
+            )}
+            <div style={{ fontSize: "0.75rem", color: "#888" }}>
+              Credentials are optional — the server falls back to its default AWS credential chain.
+            </div>
+          </div>
+        )}
       </div>
 
       {error && (
