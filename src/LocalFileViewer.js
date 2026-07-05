@@ -11,6 +11,17 @@ import * as sourcesApi from "./services/sourcesApi";
 
 const PAGE_SIZE = 25;
 const MAX_COLUMNS = 12; // keep the table readable; full detail is in drill-down
+// Above this size we don't ship the whole file to the backend (which caps at
+// 50 MB anyway). Instead we read only the first slice in the browser and upload
+// that as a preview, so a multi-GB NDJSON export loads instantly instead of
+// hanging on an endless upload.
+const PREVIEW_LIMIT_BYTES = 20 * 1024 * 1024; // 20 MB
+
+const fmtSize = (bytes) => {
+  if (bytes >= 1024 * 1024 * 1024) return (bytes / 1024 / 1024 / 1024).toFixed(1) + " GB";
+  if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + " MB";
+  return (bytes / 1024).toFixed(0) + " KB";
+};
 
 function LocalFileViewer() {
   const fileInputRef = useRef(null);
@@ -22,6 +33,7 @@ function LocalFileViewer() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null); // raw resource for drill-down
+  const [preview, setPreview] = useState(null); // { shownBytes, totalBytes } when a large file was truncated
 
   // S3 load form state
   const [s3Open, setS3Open] = useState(false);
@@ -88,7 +100,31 @@ function LocalFileViewer() {
   const handleUpload = useCallback(
     (file) => {
       if (!file) return;
-      adoptSource(() => sourcesApi.uploadSource(file));
+      setPreview(null);
+
+      // Small files: upload as-is.
+      if (file.size <= PREVIEW_LIMIT_BYTES) {
+        adoptSource(() => sourcesApi.uploadSource(file));
+        return;
+      }
+
+      // Large files: read only the first slice in the browser and upload that,
+      // trimmed to the last complete line so the NDJSON stays valid.
+      adoptSource(async () => {
+        const slice = file.slice(0, PREVIEW_LIMIT_BYTES);
+        let text = await slice.text();
+        const lastNewline = text.lastIndexOf("\n");
+        if (lastNewline <= 0) {
+          throw new Error(
+            `File is ${fmtSize(file.size)} and can't be previewed by slicing. ` +
+              `Large-file preview supports newline-delimited JSON (NDJSON) exports.`
+          );
+        }
+        text = text.slice(0, lastNewline);
+        const blob = new Blob([text], { type: "application/x-ndjson" });
+        setPreview({ shownBytes: blob.size, totalBytes: file.size });
+        return sourcesApi.uploadSource(blob, file.name);
+      });
     },
     [adoptSource]
   );
@@ -113,7 +149,7 @@ function LocalFileViewer() {
       try {
         await sourcesApi.deleteSource(source.source_id);
       } catch {
-        /* ignore — unloading is best-effort */
+        /* ignore, unloading is best-effort */
       }
     }
     setSource(null);
@@ -123,6 +159,7 @@ function LocalFileViewer() {
     setOffset(0);
     setSelected(null);
     setError(null);
+    setPreview(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [source]);
 
@@ -257,7 +294,7 @@ function LocalFileViewer() {
               </div>
             )}
             <div style={{ fontSize: "0.75rem", color: "#888" }}>
-              Credentials are optional — the server falls back to its default AWS credential chain.
+              Credentials are optional. The server falls back to its default AWS credential chain.
             </div>
           </div>
         )}
@@ -285,6 +322,12 @@ function LocalFileViewer() {
               <Trash2 size={14} /> Unload
             </button>
           </div>
+          {preview && (
+            <div style={{ background: "#fff3cd", color: "#664d03", border: "1px solid #ffe69c", padding: "0.6rem 0.9rem", borderRadius: 4, marginBottom: "0.75rem", fontSize: "0.85rem" }}>
+              Large file: previewing the first {fmtSize(preview.shownBytes)} of {fmtSize(preview.totalBytes)}
+              {" "}({source.total.toLocaleString()} resources loaded). Split the export or filter it to load more.
+            </div>
+          )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {source.resource_types?.map((rt) => (
               <button
@@ -333,7 +376,7 @@ function LocalFileViewer() {
                     >
                       {columns.map((c) => (
                         <td key={c} style={{ padding: "0.5rem 0.75rem", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {displayValue(flat[c], "—")}
+                          {displayValue(flat[c], "-")}
                         </td>
                       ))}
                     </tr>
@@ -346,7 +389,7 @@ function LocalFileViewer() {
           {/* Pagination */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.75rem", color: "#555", fontSize: "0.85rem" }}>
             <span>
-              {offset + 1}–{Math.min(offset + rows.length, total)} of {total}
+              {offset + 1} to {Math.min(offset + rows.length, total)} of {total}
             </span>
             <div style={{ display: "flex", gap: 8 }}>
               <button
