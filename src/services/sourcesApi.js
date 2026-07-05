@@ -41,6 +41,20 @@ export async function uploadSource(file) {
   return handle(response);
 }
 
+/**
+ * Load a FHIR object directly from S3 (s3://bucket/key).
+ * `body` requires `uri`; region/endpoint_url/credentials are optional.
+ * Returns the same source metadata shape as uploadSource.
+ */
+export async function loadS3Source(body) {
+  const response = await fetch(`${SOURCES_BASE}/s3`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return handle(response);
+}
+
 /** List all loaded sources. */
 export async function listSources() {
   return handle(await fetch(SOURCES_BASE));
