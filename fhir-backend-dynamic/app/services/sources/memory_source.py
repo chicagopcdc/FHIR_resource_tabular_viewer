@@ -29,8 +29,19 @@ class InMemoryStoreSource(SourceLoader):
     def summary(self) -> Dict[str, int]:
         return self._store.summary()
 
-    def search(self, resource_type: str, *, count: int = 50, offset: int = 0) -> Dict[str, Any]:
-        return self._store.search(resource_type, count=count, offset=offset)
+    def search(
+        self,
+        resource_type: str,
+        *,
+        count: int = 50,
+        offset: int = 0,
+        q: Optional[str] = None,
+        sort: Optional[str] = None,
+        order: str = "asc",
+    ) -> Dict[str, Any]:
+        return self._store.search(
+            resource_type, count=count, offset=offset, q=q, sort=sort, order=order
+        )
 
     def read(self, resource_type: str, resource_id: str) -> Optional[Dict[str, Any]]:
         return self._store.read(resource_type, resource_id)
