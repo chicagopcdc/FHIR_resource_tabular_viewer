@@ -69,8 +69,17 @@ export async function getSource(sourceId) {
 }
 
 /** Fetch a paginated FHIR searchset Bundle for one resource type. */
-export async function searchResources(sourceId, resourceType, { count = 50, offset = 0 } = {}) {
+export async function searchResources(
+  sourceId,
+  resourceType,
+  { count = 50, offset = 0, q = "", sort = "", order = "asc" } = {}
+) {
   const qs = new URLSearchParams({ count: String(count), offset: String(offset) });
+  if (q) qs.set("q", q);
+  if (sort) {
+    qs.set("sort", sort);
+    qs.set("order", order);
+  }
   return handle(
     await fetch(`${SOURCES_BASE}/${sourceId}/resources/${resourceType}?${qs}`)
   );
