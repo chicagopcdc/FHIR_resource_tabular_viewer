@@ -25,11 +25,22 @@ class SourceLoader(ABC):
         """Return the sorted list of resource types available in this source."""
 
     @abstractmethod
-    def search(self, resource_type: str, *, count: int = 50, offset: int = 0) -> Dict[str, Any]:
+    def search(
+        self,
+        resource_type: str,
+        *,
+        count: int = 50,
+        offset: int = 0,
+        q: Optional[str] = None,
+        sort: Optional[str] = None,
+        order: str = "asc",
+    ) -> Dict[str, Any]:
         """Return a FHIR ``searchset`` Bundle for ``resource_type``.
 
         Implementations must honour ``count``/``offset`` pagination and return a
         well-formed Bundle (``resourceType == "Bundle"``) even when empty.
+        ``q`` optionally filters by a case-insensitive text match; ``sort`` is a
+        dotted column path with ``order`` ``asc``/``desc``.
         """
 
     @abstractmethod

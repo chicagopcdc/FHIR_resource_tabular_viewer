@@ -13,6 +13,7 @@ from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
 from app.services import fhir
+from app.services.schema import _extract_value_by_path
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +124,9 @@ class InMemoryFhirStore:
         # so every resource is addressable via ``read``.
         self._by_type: "OrderedDict[str, List[Dict[str, Any]]]" = OrderedDict()
         self._index: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        # Lowercased serialized text per resource, aligned with each type's
+        # bucket, so global text search is a fast substring scan.
+        self._search_text: Dict[str, List[str]] = {}
 
         for resource in resources:
             rtype = resource.get("resourceType")
@@ -130,6 +134,7 @@ class InMemoryFhirStore:
                 continue
             bucket = self._by_type.setdefault(rtype, [])
             type_index = self._index.setdefault(rtype, {})
+            text_bucket = self._search_text.setdefault(rtype, [])
 
             rid = resource.get("id")
             if not isinstance(rid, str) or not rid:
@@ -139,6 +144,7 @@ class InMemoryFhirStore:
                 rid = f"{rid}-{len(bucket)}"
             bucket.append(resource)
             type_index[rid] = resource
+            text_bucket.append(json.dumps(resource, default=str).lower())
 
     @classmethod
     def from_bytes(cls, data: bytes, *, filename: str = "") -> "InMemoryFhirStore":
@@ -156,8 +162,47 @@ class InMemoryFhirStore:
     def summary(self) -> Dict[str, int]:
         return {rt: len(items) for rt, items in self._by_type.items()}
 
-    def search(self, resource_type: str, *, count: int = 50, offset: int = 0) -> Dict[str, Any]:
+    def search(
+        self,
+        resource_type: str,
+        *,
+        count: int = 50,
+        offset: int = 0,
+        q: Optional[str] = None,
+        sort: Optional[str] = None,
+        order: str = "asc",
+    ) -> Dict[str, Any]:
+        """Return a searchset Bundle, optionally filtered by text and sorted.
+
+        ``q`` is a case-insensitive substring matched against the whole resource.
+        ``sort`` is a dotted column path (e.g. ``code.coding[0].display``);
+        ``order`` is ``asc`` or ``desc``. Filtering and sorting run across every
+        resource of the type, then the result is paginated.
+        """
         items = self._by_type.get(resource_type, [])
+
+        # Filter across the full set using the prebuilt text index.
+        if q:
+            needle = q.strip().lower()
+            texts = self._search_text.get(resource_type, [])
+            items = [r for r, t in zip(items, texts) if needle in t]
+
+        # Sort across the (filtered) set by a dotted column path.
+        if sort:
+            def sort_key(resource: Dict[str, Any]):
+                value = _extract_value_by_path(resource, sort)
+                # None sorts last; numbers compare numerically, else by text.
+                if value is None:
+                    return (1, 0.0, "")
+                if isinstance(value, bool):
+                    return (0, 0.0, str(value).lower())
+                if isinstance(value, (int, float)):
+                    return (0, float(value), "")
+                return (0, 0.0, str(value).lower())
+
+            items = sorted(items, key=sort_key, reverse=(order == "desc"))
+
+        matched = len(items)
         offset = max(0, offset)
         count = max(0, count)
         page = items[offset: offset + count] if count else []
@@ -165,12 +210,11 @@ class InMemoryFhirStore:
         bundle: Dict[str, Any] = {
             "resourceType": "Bundle",
             "type": "searchset",
-            "total": len(items),
+            "total": matched,
             "entry": [{"resource": r} for r in page],
             "link": [],
         }
-        has_next = offset + count < len(items)
-        if has_next:
+        if offset + count < matched:
             bundle["link"].append(
                 {"relation": "next", "offset": offset + count, "count": count}
             )
