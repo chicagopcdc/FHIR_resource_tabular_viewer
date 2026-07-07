@@ -30,10 +30,13 @@ async function handle(response) {
  * Upload a FHIR file (resource, Bundle, JSON array, or NDJSON).
  * Returns the source metadata { source_id, summary, resource_types, ... }.
  */
-export async function uploadSource(file) {
+export async function uploadSource(file, filename) {
   const form = new FormData();
-  form.append('file', file);
-  // NOTE: do not set Content-Type — the browser sets the multipart boundary.
+  // A Blob (e.g. a large-file preview slice) has no name, so pass one through;
+  // a File carries its own name.
+  if (filename) form.append('file', file, filename);
+  else form.append('file', file);
+  // NOTE: do not set Content-Type, the browser sets the multipart boundary.
   const response = await fetch(`${SOURCES_BASE}/upload`, {
     method: 'POST',
     body: form,
