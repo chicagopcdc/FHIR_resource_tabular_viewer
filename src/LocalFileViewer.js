@@ -11,6 +11,17 @@ import * as sourcesApi from "./services/sourcesApi";
 
 const PAGE_SIZE = 25;
 const MAX_COLUMNS = 12; // keep the table readable; full detail is in drill-down
+// Above this size we don't ship the whole file to the backend (which caps at
+// 50 MB anyway). Instead we read only the first slice in the browser and upload
+// that as a preview, so a multi-GB NDJSON export loads instantly instead of
+// hanging on an endless upload.
+const PREVIEW_LIMIT_BYTES = 20 * 1024 * 1024; // 20 MB
+
+const fmtSize = (bytes) => {
+  if (bytes >= 1024 * 1024 * 1024) return (bytes / 1024 / 1024 / 1024).toFixed(1) + " GB";
+  if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + " MB";
+  return (bytes / 1024).toFixed(0) + " KB";
+};
 
 function LocalFileViewer() {
   const fileInputRef = useRef(null);
@@ -22,6 +33,10 @@ function LocalFileViewer() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null); // raw resource for drill-down
+  const [preview, setPreview] = useState(null); // { shownBytes, totalBytes } when a large file was truncated
+  const [query, setQuery] = useState(""); // applied text filter
+  const [sortField, setSortField] = useState(null);
+  const [sortOrder, setSortOrder] = useState("asc");
 
   // S3 load form state
   const [s3Open, setS3Open] = useState(false);
@@ -32,14 +47,20 @@ function LocalFileViewer() {
   const [s3AccessKey, setS3AccessKey] = useState("");
   const [s3Secret, setS3Secret] = useState("");
 
-  const loadType = useCallback(
-    async (sourceId, resourceType, nextOffset = 0) => {
+  // Core loader: fetch one page for a resource type, carrying the current text
+  // filter and sort. All of search / sort / paginate / tab-switch go through it.
+  const runQuery = useCallback(
+    async (sourceId, resourceType, opts = {}) => {
+      const { offset: nextOffset = 0, q = "", sort = null, order = "asc" } = opts;
       setLoading(true);
       setError(null);
       try {
         const bundle = await sourcesApi.searchResources(sourceId, resourceType, {
           count: PAGE_SIZE,
           offset: nextOffset,
+          q,
+          sort: sort || "",
+          order,
         });
         const resources = (bundle.entry || [])
           .map((e) => e.resource)
@@ -48,6 +69,9 @@ function LocalFileViewer() {
         setTotal(bundle.total || resources.length);
         setOffset(nextOffset);
         setActiveType(resourceType);
+        setQuery(q);
+        setSortField(sort);
+        setSortOrder(order);
       } catch (e) {
         setError(e.message);
       } finally {
@@ -55,6 +79,30 @@ function LocalFileViewer() {
       }
     },
     []
+  );
+
+  // Re-run the current type at offset 0 with given overrides (search / sort).
+  const applyView = useCallback(
+    (overrides) => {
+      if (!source || !activeType) return;
+      runQuery(source.source_id, activeType, {
+        offset: 0,
+        q: query,
+        sort: sortField,
+        order: sortOrder,
+        ...overrides,
+      });
+    },
+    [source, activeType, query, sortField, sortOrder, runQuery]
+  );
+
+  // Toggle sort on a column: same column flips asc/desc, new column starts asc.
+  const handleSort = useCallback(
+    (col) => {
+      const order = sortField === col && sortOrder === "asc" ? "desc" : "asc";
+      applyView({ sort: col, order });
+    },
+    [sortField, sortOrder, applyView]
   );
 
   // Shared post-load: adopt source metadata and open its first resource type.
@@ -69,7 +117,7 @@ function LocalFileViewer() {
         setSource(meta);
         const firstType = meta.resource_types?.[0];
         if (firstType) {
-          await loadType(meta.source_id, firstType, 0);
+          await runQuery(meta.source_id, firstType, {});
         } else {
           setRows([]);
           setTotal(0);
@@ -82,13 +130,37 @@ function LocalFileViewer() {
         setLoading(false);
       }
     },
-    [loadType]
+    [runQuery]
   );
 
   const handleUpload = useCallback(
     (file) => {
       if (!file) return;
-      adoptSource(() => sourcesApi.uploadSource(file));
+      setPreview(null);
+
+      // Small files: upload as-is.
+      if (file.size <= PREVIEW_LIMIT_BYTES) {
+        adoptSource(() => sourcesApi.uploadSource(file));
+        return;
+      }
+
+      // Large files: read only the first slice in the browser and upload that,
+      // trimmed to the last complete line so the NDJSON stays valid.
+      adoptSource(async () => {
+        const slice = file.slice(0, PREVIEW_LIMIT_BYTES);
+        let text = await slice.text();
+        const lastNewline = text.lastIndexOf("\n");
+        if (lastNewline <= 0) {
+          throw new Error(
+            `File is ${fmtSize(file.size)} and can't be previewed by slicing. ` +
+              `Large-file preview supports newline-delimited JSON (NDJSON) exports.`
+          );
+        }
+        text = text.slice(0, lastNewline);
+        const blob = new Blob([text], { type: "application/x-ndjson" });
+        setPreview({ shownBytes: blob.size, totalBytes: file.size });
+        return sourcesApi.uploadSource(blob, file.name);
+      });
     },
     [adoptSource]
   );
@@ -113,7 +185,7 @@ function LocalFileViewer() {
       try {
         await sourcesApi.deleteSource(source.source_id);
       } catch {
-        /* ignore — unloading is best-effort */
+        /* ignore, unloading is best-effort */
       }
     }
     setSource(null);
@@ -123,6 +195,10 @@ function LocalFileViewer() {
     setOffset(0);
     setSelected(null);
     setError(null);
+    setPreview(null);
+    setQuery("");
+    setSortField(null);
+    setSortOrder("asc");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [source]);
 
@@ -257,7 +333,7 @@ function LocalFileViewer() {
               </div>
             )}
             <div style={{ fontSize: "0.75rem", color: "#888" }}>
-              Credentials are optional — the server falls back to its default AWS credential chain.
+              Credentials are optional. The server falls back to its default AWS credential chain.
             </div>
           </div>
         )}
@@ -285,11 +361,17 @@ function LocalFileViewer() {
               <Trash2 size={14} /> Unload
             </button>
           </div>
+          {preview && (
+            <div style={{ background: "#fff3cd", color: "#664d03", border: "1px solid #ffe69c", padding: "0.6rem 0.9rem", borderRadius: 4, marginBottom: "0.75rem", fontSize: "0.85rem" }}>
+              Large file: previewing the first {fmtSize(preview.shownBytes)} of {fmtSize(preview.totalBytes)}
+              {" "}({source.total.toLocaleString()} resources loaded). Split the export or filter it to load more.
+            </div>
+          )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {source.resource_types?.map((rt) => (
               <button
                 key={rt}
-                onClick={() => loadType(source.source_id, rt, 0)}
+                onClick={() => runQuery(source.source_id, rt, {})}
                 style={{
                   padding: "0.35rem 0.75rem", borderRadius: 16, cursor: "pointer", fontSize: "0.85rem",
                   border: rt === activeType ? "1px solid #007bff" : "1px solid #dee2e6",
@@ -304,6 +386,38 @@ function LocalFileViewer() {
         </div>
       )}
 
+      {/* Search + result count (runs across all resources of the active type) */}
+      {source && activeType && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "0.75rem" }}>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && applyView({})}
+            placeholder={`Search ${activeType}...`}
+            style={{ flex: "0 1 320px", padding: "0.45rem 0.6rem", border: "1px solid #ccc", borderRadius: 4, fontSize: "0.85rem" }}
+          />
+          <button
+            onClick={() => applyView({})}
+            style={{ background: "#007bff", color: "white", border: "none", padding: "0.45rem 1rem", borderRadius: 4, cursor: "pointer", fontSize: "0.85rem" }}
+          >
+            Search
+          </button>
+          {query && (
+            <button
+              onClick={() => { setQuery(""); applyView({ q: "" }); }}
+              style={{ background: "#f8f9fa", border: "1px solid #dee2e6", color: "#555", padding: "0.45rem 0.9rem", borderRadius: 4, cursor: "pointer", fontSize: "0.85rem" }}
+            >
+              Clear
+            </button>
+          )}
+          <span style={{ marginLeft: "auto", color: "#888", fontSize: "0.85rem" }}>
+            {total.toLocaleString()} {query ? "matches" : "resources"}
+            {sortField ? ` · sorted by ${sortField} (${sortOrder})` : ""}
+          </span>
+        </div>
+      )}
+
       {loading && <div style={{ color: "#666", padding: "1rem 0" }}>Loading…</div>}
 
       {/* Table */}
@@ -314,8 +428,14 @@ function LocalFileViewer() {
               <thead>
                 <tr style={{ background: "#f8f9fa", textAlign: "left" }}>
                   {columns.map((c) => (
-                    <th key={c} style={{ padding: "0.5rem 0.75rem", borderBottom: "2px solid #e0e0e0", whiteSpace: "nowrap", color: "#444" }}>
+                    <th
+                      key={c}
+                      onClick={() => handleSort(c)}
+                      title="Sort by this column"
+                      style={{ padding: "0.5rem 0.75rem", borderBottom: "2px solid #e0e0e0", whiteSpace: "nowrap", color: sortField === c ? "#007bff" : "#444", cursor: "pointer", userSelect: "none" }}
+                    >
                       {c}
+                      {sortField === c ? (sortOrder === "asc" ? " ▲" : " ▼") : ""}
                     </th>
                   ))}
                 </tr>
@@ -333,7 +453,7 @@ function LocalFileViewer() {
                     >
                       {columns.map((c) => (
                         <td key={c} style={{ padding: "0.5rem 0.75rem", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {displayValue(flat[c], "—")}
+                          {displayValue(flat[c], "-")}
                         </td>
                       ))}
                     </tr>
@@ -346,12 +466,12 @@ function LocalFileViewer() {
           {/* Pagination */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "0.75rem", color: "#555", fontSize: "0.85rem" }}>
             <span>
-              {offset + 1}–{Math.min(offset + rows.length, total)} of {total}
+              {offset + 1} to {Math.min(offset + rows.length, total)} of {total}
             </span>
             <div style={{ display: "flex", gap: 8 }}>
               <button
                 disabled={offset === 0}
-                onClick={() => loadType(source.source_id, activeType, Math.max(0, offset - PAGE_SIZE))}
+                onClick={() => runQuery(source.source_id, activeType, { offset: Math.max(0, offset - PAGE_SIZE), q: query, sort: sortField, order: sortOrder })}
                 style={pagerBtn(offset === 0)}
               >
                 Previous
@@ -359,7 +479,7 @@ function LocalFileViewer() {
               <span style={{ alignSelf: "center" }}>Page {page} / {pageCount}</span>
               <button
                 disabled={offset + PAGE_SIZE >= total}
-                onClick={() => loadType(source.source_id, activeType, offset + PAGE_SIZE)}
+                onClick={() => runQuery(source.source_id, activeType, { offset: offset + PAGE_SIZE, q: query, sort: sortField, order: sortOrder })}
                 style={pagerBtn(offset + PAGE_SIZE >= total)}
               >
                 Next
@@ -370,7 +490,11 @@ function LocalFileViewer() {
       )}
 
       {!loading && source && activeType && rows.length === 0 && (
-        <div style={{ color: "#666", padding: "1rem 0" }}>No {activeType} resources in this file.</div>
+        <div style={{ color: "#666", padding: "1rem 0" }}>
+          {query
+            ? `No ${activeType} resources match "${query}".`
+            : `No ${activeType} resources in this file.`}
+        </div>
       )}
 
       {/* Drill-down drawer */}

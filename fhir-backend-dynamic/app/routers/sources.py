@@ -121,13 +121,20 @@ async def search_resources(
     resource_type: str,
     count: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
+    q: Optional[str] = Query(None, description="Case-insensitive text filter"),
+    sort: Optional[str] = Query(None, description="Dotted column path to sort by"),
+    order: str = Query("asc", pattern="^(asc|desc)$"),
 ):
-    """Return a paginated FHIR searchset Bundle for a resource type."""
+    """Return a paginated FHIR searchset Bundle for a resource type.
+
+    Optional ``q`` filters, and ``sort``/``order`` sort, across all resources of
+    the type before pagination.
+    """
     try:
         loader = source_registry.get_source(source_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Source not found")
-    bundle = loader.search(resource_type, count=count, offset=offset)
+    bundle = loader.search(resource_type, count=count, offset=offset, q=q, sort=sort, order=order)
     return {"success": True, "data": bundle}
 
 

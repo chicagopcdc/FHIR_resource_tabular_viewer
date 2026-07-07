@@ -30,10 +30,13 @@ async function handle(response) {
  * Upload a FHIR file (resource, Bundle, JSON array, or NDJSON).
  * Returns the source metadata { source_id, summary, resource_types, ... }.
  */
-export async function uploadSource(file) {
+export async function uploadSource(file, filename) {
   const form = new FormData();
-  form.append('file', file);
-  // NOTE: do not set Content-Type — the browser sets the multipart boundary.
+  // A Blob (e.g. a large-file preview slice) has no name, so pass one through;
+  // a File carries its own name.
+  if (filename) form.append('file', file, filename);
+  else form.append('file', file);
+  // NOTE: do not set Content-Type, the browser sets the multipart boundary.
   const response = await fetch(`${SOURCES_BASE}/upload`, {
     method: 'POST',
     body: form,
@@ -66,8 +69,17 @@ export async function getSource(sourceId) {
 }
 
 /** Fetch a paginated FHIR searchset Bundle for one resource type. */
-export async function searchResources(sourceId, resourceType, { count = 50, offset = 0 } = {}) {
+export async function searchResources(
+  sourceId,
+  resourceType,
+  { count = 50, offset = 0, q = "", sort = "", order = "asc" } = {}
+) {
   const qs = new URLSearchParams({ count: String(count), offset: String(offset) });
+  if (q) qs.set("q", q);
+  if (sort) {
+    qs.set("sort", sort);
+    qs.set("order", order);
+  }
   return handle(
     await fetch(`${SOURCES_BASE}/${sourceId}/resources/${resourceType}?${qs}`)
   );
