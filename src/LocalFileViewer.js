@@ -5,7 +5,7 @@
 // so the table matches the rest of the app.
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Upload, FileJson, Trash2, X, ArrowLeft, Cloud } from "lucide-react";
+import { Upload, FileJson, Trash2, X, ArrowLeft, Cloud, Download } from "lucide-react";
 import { flattenResource, displayValue } from "./api";
 import * as sourcesApi from "./services/sourcesApi";
 
@@ -163,6 +163,26 @@ function LocalFileViewer() {
       });
     },
     [adoptSource]
+  );
+
+  // Download all matching resources (current filter + sort) as CSV or NDJSON.
+  const handleExport = useCallback(
+    (format) => {
+      if (!source || !activeType) return;
+      const url = sourcesApi.exportUrl(source.source_id, activeType, {
+        format,
+        q: query,
+        sort: sortField,
+        order: sortOrder,
+      });
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${activeType}.${format === "ndjson" ? "ndjson" : "csv"}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    },
+    [source, activeType, query, sortField, sortOrder]
   );
 
   const handleS3Load = useCallback(() => {
@@ -415,6 +435,24 @@ function LocalFileViewer() {
             {total.toLocaleString()} {query ? "matches" : "resources"}
             {sortField ? ` · sorted by ${sortField} (${sortOrder})` : ""}
           </span>
+          {total > 0 && (
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                onClick={() => handleExport("csv")}
+                title="Download all matching resources as CSV"
+                style={{ display: "flex", alignItems: "center", gap: 4, background: "white", border: "1px solid #dee2e6", color: "#007bff", padding: "0.45rem 0.75rem", borderRadius: 4, cursor: "pointer", fontSize: "0.8rem" }}
+              >
+                <Download size={14} /> CSV
+              </button>
+              <button
+                onClick={() => handleExport("ndjson")}
+                title="Download all matching resources as NDJSON"
+                style={{ display: "flex", alignItems: "center", gap: 4, background: "white", border: "1px solid #dee2e6", color: "#007bff", padding: "0.45rem 0.75rem", borderRadius: 4, cursor: "pointer", fontSize: "0.8rem" }}
+              >
+                <Download size={14} /> JSON
+              </button>
+            </div>
+          )}
         </div>
       )}
 

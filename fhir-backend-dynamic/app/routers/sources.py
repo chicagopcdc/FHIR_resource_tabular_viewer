@@ -10,8 +10,10 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, File, UploadFile, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.services.sources import export as export_service
 from app.services.sources import registry as source_registry
 from app.services.sources.local_file import LocalFileSource
 from app.services.sources.s3_file import S3FileSource, S3Settings, S3Error
@@ -136,6 +138,47 @@ async def search_resources(
         raise HTTPException(status_code=404, detail="Source not found")
     bundle = loader.search(resource_type, count=count, offset=offset, q=q, sort=sort, order=order)
     return {"success": True, "data": bundle}
+
+
+@router.get("/{source_id}/resources/{resource_type}/export")
+async def export_resources(
+    source_id: str,
+    resource_type: str,
+    format: str = Query("csv", pattern="^(csv|ndjson)$"),
+    q: Optional[str] = Query(None, description="Case-insensitive text filter"),
+    sort: Optional[str] = Query(None, description="Dotted column path to sort by"),
+    order: str = Query("asc", pattern="^(asc|desc)$"),
+):
+    """Download all matching resources of a type as CSV or NDJSON.
+
+    Honours the same ``q``/``sort``/``order`` as the table, so the export
+    reflects the current filtered and sorted view (not just the visible page).
+    """
+    try:
+        loader = source_registry.get_source(source_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    # Pull every matching resource (search caps only on the HTTP param, not here).
+    bundle = loader.search(resource_type, count=10_000_000, offset=0, q=q, sort=sort, order=order)
+    resources = [e["resource"] for e in bundle.get("entry", []) if isinstance(e.get("resource"), dict)]
+
+    if format == "ndjson":
+        content = export_service.rows_to_ndjson(resources)
+        media_type = "application/x-ndjson"
+        ext = "ndjson"
+    else:
+        columns = export_service.columns_for(resources)
+        content = export_service.rows_to_csv(resources, columns)
+        media_type = "text/csv"
+        ext = "csv"
+
+    filename = f"{resource_type}.{ext}"
+    return StreamingResponse(
+        content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{source_id}/resources/{resource_type}/schema")
