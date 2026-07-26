@@ -85,6 +85,20 @@ export async function searchResources(
   );
 }
 
+/**
+ * Build a download URL for exporting all matching resources of a type.
+ * Honors the same q/sort/order as the table. `format` is "csv" or "ndjson".
+ */
+export function exportUrl(sourceId, resourceType, { format = "csv", q = "", sort = "", order = "asc" } = {}) {
+  const qs = new URLSearchParams({ format });
+  if (q) qs.set("q", q);
+  if (sort) {
+    qs.set("sort", sort);
+    qs.set("order", order);
+  }
+  return `${SOURCES_BASE}/${sourceId}/resources/${resourceType}/export?${qs}`;
+}
+
 /** Get inferred tabular columns for a resource type. */
 export async function getResourceSchema(sourceId, resourceType, sample = 20) {
   const qs = new URLSearchParams({ sample: String(sample) });
