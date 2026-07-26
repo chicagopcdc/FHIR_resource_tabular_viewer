@@ -5,8 +5,9 @@
 // so the table matches the rest of the app.
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Upload, FileJson, Trash2, X, ArrowLeft, Cloud } from "lucide-react";
+import { Upload, FileJson, Trash2, X, ArrowLeft, Cloud, Download } from "lucide-react";
 import { flattenResource, displayValue } from "./api";
+import { readableRow, readableColumns, sortPathFor } from "./fhirDisplay";
 import * as sourcesApi from "./services/sourcesApi";
 
 const PAGE_SIZE = 25;
@@ -37,6 +38,7 @@ function LocalFileViewer() {
   const [query, setQuery] = useState(""); // applied text filter
   const [sortField, setSortField] = useState(null);
   const [sortOrder, setSortOrder] = useState("asc");
+  const [viewMode, setViewMode] = useState("readable"); // "readable" | "raw"
 
   // S3 load form state
   const [s3Open, setS3Open] = useState(false);
@@ -165,6 +167,26 @@ function LocalFileViewer() {
     [adoptSource]
   );
 
+  // Download all matching resources (current filter + sort) as CSV or NDJSON.
+  const handleExport = useCallback(
+    (format) => {
+      if (!source || !activeType) return;
+      const url = sourcesApi.exportUrl(source.source_id, activeType, {
+        format,
+        q: query,
+        sort: sortField,
+        order: sortOrder,
+      });
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${activeType}.${format === "ndjson" ? "ndjson" : "csv"}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    },
+    [source, activeType, query, sortField, sortOrder]
+  );
+
   const handleS3Load = useCallback(() => {
     if (!s3Uri.trim()) {
       setError("Enter an s3://bucket/key URI.");
@@ -202,8 +224,10 @@ function LocalFileViewer() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [source]);
 
-  // Columns derived from the current page of rows (consistent with app helpers).
+  // Readable mode: curated columns with FHIR datatypes formatted. Raw mode: the
+  // full dotted-path flatten. Columns are derived from the current page of rows.
   const columns = useMemo(() => {
+    if (viewMode === "readable") return readableColumns(rows);
     const freq = {};
     rows.forEach((r) => {
       Object.keys(flattenResource(r)).forEach((k) => {
@@ -219,7 +243,7 @@ function LocalFileViewer() {
         .sort((a, b) => freq[b] - freq[a]),
     ];
     return ordered.slice(0, MAX_COLUMNS);
-  }, [rows]);
+  }, [rows, viewMode]);
 
   const page = Math.floor(offset / PAGE_SIZE) + 1;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -411,10 +435,43 @@ function LocalFileViewer() {
               Clear
             </button>
           )}
+          <div style={{ display: "flex", border: "1px solid #dee2e6", borderRadius: 4, overflow: "hidden" }} title="Readable formats FHIR datatypes; Raw shows dotted paths">
+            {["readable", "raw"].map((m) => (
+              <button
+                key={m}
+                onClick={() => setViewMode(m)}
+                style={{
+                  border: "none", padding: "0.45rem 0.8rem", cursor: "pointer", fontSize: "0.8rem",
+                  background: viewMode === m ? "#007bff" : "white",
+                  color: viewMode === m ? "white" : "#555",
+                }}
+              >
+                {m === "readable" ? "Readable" : "Raw paths"}
+              </button>
+            ))}
+          </div>
           <span style={{ marginLeft: "auto", color: "#888", fontSize: "0.85rem" }}>
             {total.toLocaleString()} {query ? "matches" : "resources"}
             {sortField ? ` · sorted by ${sortField} (${sortOrder})` : ""}
           </span>
+          {total > 0 && (
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                onClick={() => handleExport("csv")}
+                title="Download all matching resources as CSV"
+                style={{ display: "flex", alignItems: "center", gap: 4, background: "white", border: "1px solid #dee2e6", color: "#007bff", padding: "0.45rem 0.75rem", borderRadius: 4, cursor: "pointer", fontSize: "0.8rem" }}
+              >
+                <Download size={14} /> CSV
+              </button>
+              <button
+                onClick={() => handleExport("ndjson")}
+                title="Download all matching resources as NDJSON"
+                style={{ display: "flex", alignItems: "center", gap: 4, background: "white", border: "1px solid #dee2e6", color: "#007bff", padding: "0.45rem 0.75rem", borderRadius: 4, cursor: "pointer", fontSize: "0.8rem" }}
+              >
+                <Download size={14} /> JSON
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -427,22 +484,26 @@ function LocalFileViewer() {
             <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.85rem" }}>
               <thead>
                 <tr style={{ background: "#f8f9fa", textAlign: "left" }}>
-                  {columns.map((c) => (
-                    <th
-                      key={c}
-                      onClick={() => handleSort(c)}
-                      title="Sort by this column"
-                      style={{ padding: "0.5rem 0.75rem", borderBottom: "2px solid #e0e0e0", whiteSpace: "nowrap", color: sortField === c ? "#007bff" : "#444", cursor: "pointer", userSelect: "none" }}
-                    >
-                      {c}
-                      {sortField === c ? (sortOrder === "asc" ? " ▲" : " ▼") : ""}
-                    </th>
-                  ))}
+                  {columns.map((c) => {
+                    const sp = viewMode === "readable" ? sortPathFor(c, rows[0]) : c;
+                    const active = sortField === sp;
+                    return (
+                      <th
+                        key={c}
+                        onClick={() => handleSort(sp)}
+                        title="Sort by this column"
+                        style={{ padding: "0.5rem 0.75rem", borderBottom: "2px solid #e0e0e0", whiteSpace: "nowrap", color: active ? "#007bff" : "#444", cursor: "pointer", userSelect: "none" }}
+                      >
+                        {c}
+                        {active ? (sortOrder === "asc" ? " ▲" : " ▼") : ""}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => {
-                  const flat = flattenResource(r);
+                  const cells = viewMode === "readable" ? readableRow(r) : flattenResource(r);
                   return (
                     <tr
                       key={r.id || i}
@@ -453,7 +514,7 @@ function LocalFileViewer() {
                     >
                       {columns.map((c) => (
                         <td key={c} style={{ padding: "0.5rem 0.75rem", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {displayValue(flat[c], "-")}
+                          {displayValue(cells[c], "-")}
                         </td>
                       ))}
                     </tr>
