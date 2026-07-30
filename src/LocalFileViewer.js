@@ -3,7 +3,7 @@
 // backend /api/sources endpoints. Kept independent of the patient-centric flow
 // so it can't destabilize it. Reuses flattenResource/displayValue from api.js
 // so the table matches the rest of the app.
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Upload, FileJson, Trash2, X, ArrowLeft, Cloud, Download } from "lucide-react";
 import { flattenResource, displayValue } from "./api";
@@ -39,6 +39,8 @@ function LocalFileViewer() {
   const [sortField, setSortField] = useState(null);
   const [sortOrder, setSortOrder] = useState("asc");
   const [viewMode, setViewMode] = useState("readable"); // "readable" | "raw"
+  const [visibleColumns, setVisibleColumns] = useState(null); // null = use defaults
+  const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
 
   // S3 load form state
   const [s3Open, setS3Open] = useState(false);
@@ -221,10 +223,10 @@ function LocalFileViewer() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [source]);
 
-  // Readable mode: curated columns with FHIR datatypes formatted. Raw mode: the
-  // full dotted-path flatten. Columns are derived from the current page of rows.
-  const columns = useMemo(() => {
-    if (viewMode === "readable") return readableColumns(rows);
+  // Every candidate column for the current rows and mode (full, uncapped).
+  // Readable mode: curated FHIR labels. Raw mode: all dotted paths.
+  const allColumns = useMemo(() => {
+    if (viewMode === "readable") return readableColumns(rows, 1000);
     const freq = {};
     rows.forEach((r) => {
       Object.keys(flattenResource(r)).forEach((k) => {
@@ -233,14 +235,39 @@ function LocalFileViewer() {
     });
     const keys = Object.keys(freq);
     const essential = ["id", "resourceType", "status", "code.text", "code.coding[0].display"];
-    const ordered = [
+    return [
       ...essential.filter((k) => keys.includes(k)),
       ...keys
         .filter((k) => !essential.includes(k))
         .sort((a, b) => freq[b] - freq[a]),
     ];
-    return ordered.slice(0, MAX_COLUMNS);
   }, [rows, viewMode]);
+
+  // Default subset shown before the user customizes visibility.
+  const defaultColumns = useMemo(
+    () => allColumns.slice(0, viewMode === "readable" ? 14 : MAX_COLUMNS),
+    [allColumns, viewMode]
+  );
+
+  // Reset any custom visibility when the type or view mode changes.
+  useEffect(() => {
+    setVisibleColumns(null);
+  }, [activeType, viewMode]);
+
+  const columns = visibleColumns ?? defaultColumns;
+
+  const toggleColumn = useCallback(
+    (col) => {
+      const base = new Set(visibleColumns ?? defaultColumns);
+      if (base.has(col)) base.delete(col);
+      else base.add(col);
+      // Keep the selection ordered like allColumns.
+      setVisibleColumns(allColumns.filter((c) => base.has(c)));
+    },
+    [visibleColumns, defaultColumns, allColumns]
+  );
+
+  const resetColumns = useCallback(() => setVisibleColumns(null), []);
 
   const page = Math.floor(offset / PAGE_SIZE) + 1;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -447,6 +474,32 @@ function LocalFileViewer() {
               </button>
             ))}
           </div>
+          {allColumns.length > 0 && (
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setColumnsMenuOpen((v) => !v)}
+                style={{ background: "white", border: "1px solid #dee2e6", color: "#555", padding: "0.45rem 0.8rem", borderRadius: 4, cursor: "pointer", fontSize: "0.8rem" }}
+              >
+                Columns ({columns.length}/{allColumns.length}) {columnsMenuOpen ? "▲" : "▼"}
+              </button>
+              {columnsMenuOpen && (
+                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 50, background: "white", border: "1px solid #dee2e6", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.12)", padding: "0.5rem", width: 300, maxHeight: 340, overflowY: "auto" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.25rem 0.25rem 0.5rem", borderBottom: "1px solid #eee", marginBottom: 4 }}>
+                    <strong style={{ fontSize: "0.8rem", color: "#333" }}>Show columns</strong>
+                    <button onClick={resetColumns} style={{ background: "none", border: "none", color: "#007bff", cursor: "pointer", fontSize: "0.75rem" }}>
+                      Reset
+                    </button>
+                  </div>
+                  {allColumns.map((c) => (
+                    <label key={c} style={{ display: "flex", alignItems: "center", gap: 6, padding: "0.25rem", fontSize: "0.8rem", color: "#333", cursor: "pointer" }}>
+                      <input type="checkbox" checked={columns.includes(c)} onChange={() => toggleColumn(c)} />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <span style={{ marginLeft: "auto", color: "#888", fontSize: "0.85rem" }}>
             {total.toLocaleString()} {query ? "matches" : "resources"}
             {sortField ? ` · sorted by ${sortField} (${sortOrder})` : ""}
