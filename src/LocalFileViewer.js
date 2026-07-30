@@ -3,7 +3,7 @@
 // backend /api/sources endpoints. Kept independent of the patient-centric flow
 // so it can't destabilize it. Reuses flattenResource/displayValue from api.js
 // so the table matches the rest of the app.
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Upload, FileJson, Trash2, X, ArrowLeft, Cloud, Download } from "lucide-react";
 import { flattenResource, displayValue } from "./api";
@@ -12,11 +12,10 @@ import * as sourcesApi from "./services/sourcesApi";
 
 const PAGE_SIZE = 25;
 const MAX_COLUMNS = 12; // keep the table readable; full detail is in drill-down
-// Above this size we don't ship the whole file to the backend (which caps at
-// 50 MB anyway). Instead we read only the first slice in the browser and upload
-// that as a preview, so a multi-GB NDJSON export loads instantly instead of
-// hanging on an endless upload.
-const PREVIEW_LIMIT_BYTES = 20 * 1024 * 1024; // 20 MB
+// Files above this size go to the streaming endpoint, which ingests them into a
+// disk-backed store instead of memory. That makes a multi-GB NDJSON export
+// fully browsable rather than truncated to a preview.
+const STREAM_THRESHOLD_BYTES = 20 * 1024 * 1024; // 20 MB
 
 const fmtSize = (bytes) => {
   if (bytes >= 1024 * 1024 * 1024) return (bytes / 1024 / 1024 / 1024).toFixed(1) + " GB";
@@ -34,11 +33,14 @@ function LocalFileViewer() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null); // raw resource for drill-down
-  const [preview, setPreview] = useState(null); // { shownBytes, totalBytes } when a large file was truncated
+  const [preview, setPreview] = useState(null); // set when a large file was streamed to disk
+  const [streaming, setStreaming] = useState(null); // { totalBytes } while a large ingest runs
   const [query, setQuery] = useState(""); // applied text filter
   const [sortField, setSortField] = useState(null);
   const [sortOrder, setSortOrder] = useState("asc");
   const [viewMode, setViewMode] = useState("readable"); // "readable" | "raw"
+  const [visibleColumns, setVisibleColumns] = useState(null); // null = use defaults
+  const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
 
   // S3 load form state
   const [s3Open, setS3Open] = useState(false);
@@ -139,29 +141,25 @@ function LocalFileViewer() {
     (file) => {
       if (!file) return;
       setPreview(null);
+      setStreaming(null);
 
-      // Small files: upload as-is.
-      if (file.size <= PREVIEW_LIMIT_BYTES) {
+      // Small files: parse in memory, which is fastest for the common case.
+      if (file.size <= STREAM_THRESHOLD_BYTES) {
         adoptSource(() => sourcesApi.uploadSource(file));
         return;
       }
 
-      // Large files: read only the first slice in the browser and upload that,
-      // trimmed to the last complete line so the NDJSON stays valid.
+      // Large files: send the whole file to the streaming endpoint, which
+      // ingests it to disk so every resource stays browsable.
+      setStreaming({ totalBytes: file.size });
       adoptSource(async () => {
-        const slice = file.slice(0, PREVIEW_LIMIT_BYTES);
-        let text = await slice.text();
-        const lastNewline = text.lastIndexOf("\n");
-        if (lastNewline <= 0) {
-          throw new Error(
-            `File is ${fmtSize(file.size)} and can't be previewed by slicing. ` +
-              `Large-file preview supports newline-delimited JSON (NDJSON) exports.`
-          );
+        try {
+          const meta = await sourcesApi.uploadSourceStreaming(file);
+          setPreview({ streamed: true, totalBytes: file.size, total: meta.total });
+          return meta;
+        } finally {
+          setStreaming(null);
         }
-        text = text.slice(0, lastNewline);
-        const blob = new Blob([text], { type: "application/x-ndjson" });
-        setPreview({ shownBytes: blob.size, totalBytes: file.size });
-        return sourcesApi.uploadSource(blob, file.name);
       });
     },
     [adoptSource]
@@ -218,16 +216,17 @@ function LocalFileViewer() {
     setSelected(null);
     setError(null);
     setPreview(null);
+    setStreaming(null);
     setQuery("");
     setSortField(null);
     setSortOrder("asc");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [source]);
 
-  // Readable mode: curated columns with FHIR datatypes formatted. Raw mode: the
-  // full dotted-path flatten. Columns are derived from the current page of rows.
-  const columns = useMemo(() => {
-    if (viewMode === "readable") return readableColumns(rows);
+  // Every candidate column for the current rows and mode (full, uncapped).
+  // Readable mode: curated FHIR labels. Raw mode: all dotted paths.
+  const allColumns = useMemo(() => {
+    if (viewMode === "readable") return readableColumns(rows, 1000);
     const freq = {};
     rows.forEach((r) => {
       Object.keys(flattenResource(r)).forEach((k) => {
@@ -236,14 +235,39 @@ function LocalFileViewer() {
     });
     const keys = Object.keys(freq);
     const essential = ["id", "resourceType", "status", "code.text", "code.coding[0].display"];
-    const ordered = [
+    return [
       ...essential.filter((k) => keys.includes(k)),
       ...keys
         .filter((k) => !essential.includes(k))
         .sort((a, b) => freq[b] - freq[a]),
     ];
-    return ordered.slice(0, MAX_COLUMNS);
   }, [rows, viewMode]);
+
+  // Default subset shown before the user customizes visibility.
+  const defaultColumns = useMemo(
+    () => allColumns.slice(0, viewMode === "readable" ? 14 : MAX_COLUMNS),
+    [allColumns, viewMode]
+  );
+
+  // Reset any custom visibility when the type or view mode changes.
+  useEffect(() => {
+    setVisibleColumns(null);
+  }, [activeType, viewMode]);
+
+  const columns = visibleColumns ?? defaultColumns;
+
+  const toggleColumn = useCallback(
+    (col) => {
+      const base = new Set(visibleColumns ?? defaultColumns);
+      if (base.has(col)) base.delete(col);
+      else base.add(col);
+      // Keep the selection ordered like allColumns.
+      setVisibleColumns(allColumns.filter((c) => base.has(c)));
+    },
+    [visibleColumns, defaultColumns, allColumns]
+  );
+
+  const resetColumns = useCallback(() => setVisibleColumns(null), []);
 
   const page = Math.floor(offset / PAGE_SIZE) + 1;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -386,9 +410,9 @@ function LocalFileViewer() {
             </button>
           </div>
           {preview && (
-            <div style={{ background: "#fff3cd", color: "#664d03", border: "1px solid #ffe69c", padding: "0.6rem 0.9rem", borderRadius: 4, marginBottom: "0.75rem", fontSize: "0.85rem" }}>
-              Large file: previewing the first {fmtSize(preview.shownBytes)} of {fmtSize(preview.totalBytes)}
-              {" "}({source.total.toLocaleString()} resources loaded). Split the export or filter it to load more.
+            <div style={{ background: "#d1e7dd", color: "#0a3622", border: "1px solid #a3cfbb", padding: "0.6rem 0.9rem", borderRadius: 4, marginBottom: "0.75rem", fontSize: "0.85rem" }}>
+              Streamed all {source.total.toLocaleString()} resources from {fmtSize(preview.totalBytes)} to a
+              disk-backed index. Search and sort run across the whole file.
             </div>
           )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -450,6 +474,32 @@ function LocalFileViewer() {
               </button>
             ))}
           </div>
+          {allColumns.length > 0 && (
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setColumnsMenuOpen((v) => !v)}
+                style={{ background: "white", border: "1px solid #dee2e6", color: "#555", padding: "0.45rem 0.8rem", borderRadius: 4, cursor: "pointer", fontSize: "0.8rem" }}
+              >
+                Columns ({columns.length}/{allColumns.length}) {columnsMenuOpen ? "▲" : "▼"}
+              </button>
+              {columnsMenuOpen && (
+                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 50, background: "white", border: "1px solid #dee2e6", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.12)", padding: "0.5rem", width: 300, maxHeight: 340, overflowY: "auto" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.25rem 0.25rem 0.5rem", borderBottom: "1px solid #eee", marginBottom: 4 }}>
+                    <strong style={{ fontSize: "0.8rem", color: "#333" }}>Show columns</strong>
+                    <button onClick={resetColumns} style={{ background: "none", border: "none", color: "#007bff", cursor: "pointer", fontSize: "0.75rem" }}>
+                      Reset
+                    </button>
+                  </div>
+                  {allColumns.map((c) => (
+                    <label key={c} style={{ display: "flex", alignItems: "center", gap: 6, padding: "0.25rem", fontSize: "0.8rem", color: "#333", cursor: "pointer" }}>
+                      <input type="checkbox" checked={columns.includes(c)} onChange={() => toggleColumn(c)} />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <span style={{ marginLeft: "auto", color: "#888", fontSize: "0.85rem" }}>
             {total.toLocaleString()} {query ? "matches" : "resources"}
             {sortField ? ` · sorted by ${sortField} (${sortOrder})` : ""}
@@ -475,7 +525,13 @@ function LocalFileViewer() {
         </div>
       )}
 
-      {loading && <div style={{ color: "#666", padding: "1rem 0" }}>Loading…</div>}
+      {loading && (
+        <div style={{ color: "#666", padding: "1rem 0" }}>
+          {streaming
+            ? `Streaming ${fmtSize(streaming.totalBytes)} to a disk-backed index. Large files take a moment, and the whole file stays searchable.`
+            : "Loading…"}
+        </div>
+      )}
 
       {/* Table */}
       {!loading && source && activeType && rows.length > 0 && (

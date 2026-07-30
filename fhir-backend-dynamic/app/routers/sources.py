@@ -11,6 +11,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, File, UploadFile, Query
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from app.services.sources import export as export_service
@@ -18,6 +19,10 @@ from app.services.sources import registry as source_registry
 from app.services.sources.local_file import LocalFileSource
 from app.services.sources.s3_file import S3FileSource, S3Settings, S3Error
 from app.services.sources.store import FhirParseError
+from app.services.sources.streaming_file import StreamingFileSource
+
+# Generous ceiling for streamed ingests; disk, not RAM, is the real limit.
+STREAM_MAX_RESOURCES = 5_000_000
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 logger = logging.getLogger(__name__)
@@ -59,6 +64,41 @@ async def upload_source(file: UploadFile = File(...)):
     metadata = source_registry.add_source(loader, name=file.filename or "uploaded-file")
     logger.info(
         "Loaded source %s from %s (%d resources, %d types)",
+        metadata["source_id"], file.filename, metadata["total"],
+        len(metadata["resource_types"]),
+    )
+    return {"success": True, "data": metadata}
+
+
+@router.post("/upload/stream")
+async def upload_source_streaming(file: UploadFile = File(...)):
+    """Ingest a large NDJSON upload straight to disk, without buffering it.
+
+    Starlette spools the upload to a temp file, so this reads it line by line
+    into a SQLite-backed store. Peak memory stays flat regardless of file size,
+    which lets multi-GB bulk exports be browsed in full rather than previewed.
+    """
+    def _ingest() -> StreamingFileSource:
+        file.file.seek(0)
+        return StreamingFileSource.from_lines(
+            file.file,
+            filename=file.filename or "",
+            max_resources=STREAM_MAX_RESOURCES,
+        )
+
+    try:
+        loader = await run_in_threadpool(_ingest)
+    except FhirParseError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=422, detail="File is not valid UTF-8 text.")
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.exception("Unexpected error streaming upload %s", file.filename)
+        raise HTTPException(status_code=500, detail=f"Failed to ingest file: {exc}")
+
+    metadata = source_registry.add_source(loader, name=file.filename or "uploaded-file")
+    logger.info(
+        "Streamed source %s from %s (%d resources, %d types)",
         metadata["source_id"], file.filename, metadata["total"],
         len(metadata["resource_types"]),
     )

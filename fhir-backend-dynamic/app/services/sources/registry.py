@@ -69,9 +69,23 @@ def list_sources() -> List[Dict[str, Any]]:
 
 def remove_source(source_id: str) -> bool:
     with _LOCK:
-        return _SOURCES.pop(source_id, None) is not None
+        entry = _SOURCES.pop(source_id, None)
+    if entry is None:
+        return False
+    # Let disk-backed sources drop their temp database.
+    try:
+        entry.loader.close()
+    except Exception:  # pragma: no cover - unloading is best-effort
+        pass
+    return True
 
 
 def clear() -> None:
     with _LOCK:
+        entries = list(_SOURCES.values())
         _SOURCES.clear()
+    for entry in entries:
+        try:
+            entry.loader.close()
+        except Exception:  # pragma: no cover - best-effort
+            pass

@@ -51,6 +51,14 @@ class SourceLoader(ABC):
         """Return a ``{resource_type: count}`` map describing the source."""
         return {rt: self.count(rt) for rt in self.resource_types()}
 
+    def close(self) -> None:
+        """Release any resources held by this source.
+
+        In-memory sources need nothing; disk-backed ones override this to close
+        their database and delete temp files. Called when a source is unloaded.
+        """
+        return None
+
     @abstractmethod
     def count(self, resource_type: str) -> int:
         """Return the number of resources of ``resource_type`` in this source."""
