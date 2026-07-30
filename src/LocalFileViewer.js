@@ -12,11 +12,10 @@ import * as sourcesApi from "./services/sourcesApi";
 
 const PAGE_SIZE = 25;
 const MAX_COLUMNS = 12; // keep the table readable; full detail is in drill-down
-// Above this size we don't ship the whole file to the backend (which caps at
-// 50 MB anyway). Instead we read only the first slice in the browser and upload
-// that as a preview, so a multi-GB NDJSON export loads instantly instead of
-// hanging on an endless upload.
-const PREVIEW_LIMIT_BYTES = 20 * 1024 * 1024; // 20 MB
+// Files above this size go to the streaming endpoint, which ingests them into a
+// disk-backed store instead of memory. That makes a multi-GB NDJSON export
+// fully browsable rather than truncated to a preview.
+const STREAM_THRESHOLD_BYTES = 20 * 1024 * 1024; // 20 MB
 
 const fmtSize = (bytes) => {
   if (bytes >= 1024 * 1024 * 1024) return (bytes / 1024 / 1024 / 1024).toFixed(1) + " GB";
@@ -34,7 +33,8 @@ function LocalFileViewer() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null); // raw resource for drill-down
-  const [preview, setPreview] = useState(null); // { shownBytes, totalBytes } when a large file was truncated
+  const [preview, setPreview] = useState(null); // set when a large file was streamed to disk
+  const [streaming, setStreaming] = useState(null); // { totalBytes } while a large ingest runs
   const [query, setQuery] = useState(""); // applied text filter
   const [sortField, setSortField] = useState(null);
   const [sortOrder, setSortOrder] = useState("asc");
@@ -139,29 +139,25 @@ function LocalFileViewer() {
     (file) => {
       if (!file) return;
       setPreview(null);
+      setStreaming(null);
 
-      // Small files: upload as-is.
-      if (file.size <= PREVIEW_LIMIT_BYTES) {
+      // Small files: parse in memory, which is fastest for the common case.
+      if (file.size <= STREAM_THRESHOLD_BYTES) {
         adoptSource(() => sourcesApi.uploadSource(file));
         return;
       }
 
-      // Large files: read only the first slice in the browser and upload that,
-      // trimmed to the last complete line so the NDJSON stays valid.
+      // Large files: send the whole file to the streaming endpoint, which
+      // ingests it to disk so every resource stays browsable.
+      setStreaming({ totalBytes: file.size });
       adoptSource(async () => {
-        const slice = file.slice(0, PREVIEW_LIMIT_BYTES);
-        let text = await slice.text();
-        const lastNewline = text.lastIndexOf("\n");
-        if (lastNewline <= 0) {
-          throw new Error(
-            `File is ${fmtSize(file.size)} and can't be previewed by slicing. ` +
-              `Large-file preview supports newline-delimited JSON (NDJSON) exports.`
-          );
+        try {
+          const meta = await sourcesApi.uploadSourceStreaming(file);
+          setPreview({ streamed: true, totalBytes: file.size, total: meta.total });
+          return meta;
+        } finally {
+          setStreaming(null);
         }
-        text = text.slice(0, lastNewline);
-        const blob = new Blob([text], { type: "application/x-ndjson" });
-        setPreview({ shownBytes: blob.size, totalBytes: file.size });
-        return sourcesApi.uploadSource(blob, file.name);
       });
     },
     [adoptSource]
@@ -218,6 +214,7 @@ function LocalFileViewer() {
     setSelected(null);
     setError(null);
     setPreview(null);
+    setStreaming(null);
     setQuery("");
     setSortField(null);
     setSortOrder("asc");
@@ -386,9 +383,9 @@ function LocalFileViewer() {
             </button>
           </div>
           {preview && (
-            <div style={{ background: "#fff3cd", color: "#664d03", border: "1px solid #ffe69c", padding: "0.6rem 0.9rem", borderRadius: 4, marginBottom: "0.75rem", fontSize: "0.85rem" }}>
-              Large file: previewing the first {fmtSize(preview.shownBytes)} of {fmtSize(preview.totalBytes)}
-              {" "}({source.total.toLocaleString()} resources loaded). Split the export or filter it to load more.
+            <div style={{ background: "#d1e7dd", color: "#0a3622", border: "1px solid #a3cfbb", padding: "0.6rem 0.9rem", borderRadius: 4, marginBottom: "0.75rem", fontSize: "0.85rem" }}>
+              Streamed all {source.total.toLocaleString()} resources from {fmtSize(preview.totalBytes)} to a
+              disk-backed index. Search and sort run across the whole file.
             </div>
           )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -475,7 +472,13 @@ function LocalFileViewer() {
         </div>
       )}
 
-      {loading && <div style={{ color: "#666", padding: "1rem 0" }}>Loading…</div>}
+      {loading && (
+        <div style={{ color: "#666", padding: "1rem 0" }}>
+          {streaming
+            ? `Streaming ${fmtSize(streaming.totalBytes)} to a disk-backed index. Large files take a moment, and the whole file stays searchable.`
+            : "Loading…"}
+        </div>
+      )}
 
       {/* Table */}
       {!loading && source && activeType && rows.length > 0 && (

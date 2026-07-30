@@ -45,6 +45,21 @@ export async function uploadSource(file, filename) {
 }
 
 /**
+ * Upload a large NDJSON file for streaming ingest. The backend writes it
+ * straight to a disk-backed store, so the whole file is browsable rather than
+ * only a preview of the start.
+ */
+export async function uploadSourceStreaming(file) {
+  const form = new FormData();
+  form.append('file', file);
+  const response = await fetch(`${SOURCES_BASE}/upload/stream`, {
+    method: 'POST',
+    body: form,
+  });
+  return handle(response);
+}
+
+/**
  * Load a FHIR object directly from S3 (s3://bucket/key).
  * `body` requires `uri`; region/endpoint_url/credentials are optional.
  * Returns the same source metadata shape as uploadSource.
