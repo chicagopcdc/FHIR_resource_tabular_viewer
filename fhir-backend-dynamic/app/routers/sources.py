@@ -221,6 +221,28 @@ async def export_resources(
     )
 
 
+@router.get("/{source_id}/resources/{resource_type}/profile")
+async def profile_resources(
+    source_id: str,
+    resource_type: str,
+    top_n: int = Query(5, ge=1, le=25),
+    max_columns: int = Query(25, ge=1, le=100),
+):
+    """Describe what is in a resource type: completeness and most common values.
+
+    For each column this reports how many resources have the field populated and
+    which values dominate, so a dataset can be assessed before it is used.
+    """
+    try:
+        loader = source_registry.get_source(source_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return {
+        "success": True,
+        "data": loader.profile(resource_type, top_n=top_n, max_columns=max_columns),
+    }
+
+
 @router.get("/{source_id}/resources/{resource_type}/schema")
 async def resource_schema(
     source_id: str,
