@@ -67,6 +67,14 @@ class StreamingFileSource(SourceLoader):
     def read(self, resource_type: str, resource_id: str) -> Optional[Dict[str, Any]]:
         return self._store.read(resource_type, resource_id)
 
+    def links(self, resource_type: str, *, sample: int = 20_000) -> Dict[str, Any]:
+        """Analyze links from a strided sample rather than the whole table."""
+        return self._links_payload(
+            resource_type,
+            self._store.sample_resources(resource_type, sample),
+            self.count(resource_type),
+        )
+
     def profile(
         self,
         resource_type: str,

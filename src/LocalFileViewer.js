@@ -5,7 +5,7 @@
 // so the table matches the rest of the app.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Upload, FileJson, Trash2, X, ArrowLeft, Cloud, Download, BarChart3 } from "lucide-react";
+import { Upload, FileJson, Trash2, X, ArrowLeft, Cloud, Download, BarChart3, Link2 as LinkIcon } from "lucide-react";
 import { flattenResource, displayValue } from "./api";
 import { readableRow, readableColumns, sortPathFor } from "./fhirDisplay";
 import * as sourcesApi from "./services/sourcesApi";
@@ -44,6 +44,9 @@ function LocalFileViewer() {
   const [profileData, setProfileData] = useState(null); // dataset profile for activeType
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [linksData, setLinksData] = useState(null); // reference integrity for activeType
+  const [linksOpen, setLinksOpen] = useState(false);
+  const [linksLoading, setLinksLoading] = useState(false);
 
   // S3 load form state
   const [s3Open, setS3Open] = useState(false);
@@ -188,10 +191,47 @@ function LocalFileViewer() {
     }
   }, [profileOpen, profileData, source, activeType]);
 
-  // A profile describes one resource type, so drop it when the type changes.
+  // Where does this type point, and do those links resolve in this dataset?
+  const toggleLinks = useCallback(async () => {
+    if (linksOpen) {
+      setLinksOpen(false);
+      return;
+    }
+    setLinksOpen(true);
+    if (linksData || !source || !activeType) return;
+    setLinksLoading(true);
+    try {
+      setLinksData(await sourcesApi.analyzeLinks(source.source_id, activeType));
+    } catch (e) {
+      setError(e.message);
+      setLinksOpen(false);
+    } finally {
+      setLinksLoading(false);
+    }
+  }, [linksOpen, linksData, source, activeType]);
+
+  // Jump from a reference in the drill-down to the resource it points at.
+  const followReference = useCallback(
+    async (ref) => {
+      if (!source) return;
+      const [targetType, targetId] = String(ref).split("/").slice(-2);
+      if (!targetType || !targetId) return;
+      try {
+        const target = await sourcesApi.readResource(source.source_id, targetType, targetId);
+        setSelected(target);
+      } catch {
+        setError(`${ref} is not present in this dataset.`);
+      }
+    },
+    [source]
+  );
+
+  // A profile and link map describe one resource type, so drop them on change.
   useEffect(() => {
     setProfileData(null);
     setProfileOpen(false);
+    setLinksData(null);
+    setLinksOpen(false);
   }, [activeType]);
 
   // Download all matching resources (current filter + sort) as CSV or NDJSON.
@@ -297,6 +337,38 @@ function LocalFileViewer() {
   );
 
   const resetColumns = useCallback(() => setVisibleColumns(null), []);
+
+  // References inside the open resource, so the drill-down can walk the graph.
+  const selectedRefs = useMemo(() => {
+    const found = [];
+    const walk = (node, path, depth) => {
+      if (!node || typeof node !== "object" || depth > 8) return;
+      if (Array.isArray(node)) {
+        node.forEach((item) => walk(item, path, depth + 1));
+        return;
+      }
+      if (typeof node.reference === "string" && path) {
+        const ref = node.reference.trim();
+        // Contained and bundle-local references are not addressable by id.
+        if (ref && !ref.startsWith("#") && !ref.startsWith("urn:")) {
+          found.push({ path, ref });
+        }
+      }
+      Object.entries(node).forEach(([key, value]) => {
+        if (key === "reference") return;
+        walk(value, path ? `${path}.${key}` : key, depth + 1);
+      });
+    };
+    walk(selected, "", 0);
+    // De-duplicate repeated targets so the strip stays short.
+    const seen = new Set();
+    return found.filter(({ path, ref }) => {
+      const key = `${path}:${ref}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [selected]);
 
   const page = Math.floor(offset / PAGE_SIZE) + 1;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -542,6 +614,19 @@ function LocalFileViewer() {
           >
             <BarChart3 size={14} /> Profile
           </button>
+          <button
+            onClick={toggleLinks}
+            title="Check whether this type's references resolve inside the dataset"
+            style={{
+              display: "flex", alignItems: "center", gap: 4, borderRadius: 4, cursor: "pointer", fontSize: "0.8rem",
+              padding: "0.45rem 0.8rem",
+              border: linksOpen ? "1px solid #007bff" : "1px solid #dee2e6",
+              background: linksOpen ? "#007bff" : "white",
+              color: linksOpen ? "white" : "#555",
+            }}
+          >
+            <LinkIcon size={14} /> Links
+          </button>
           <span style={{ marginLeft: "auto", color: "#888", fontSize: "0.85rem" }}>
             {total.toLocaleString()} {query ? "matches" : "resources"}
             {sortField ? ` · sorted by ${sortField} (${sortOrder})` : ""}
@@ -636,6 +721,66 @@ function LocalFileViewer() {
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Reference integrity: where this type points, and what resolves */}
+      {linksOpen && (
+        <div style={{ border: "1px solid #e0e0e0", borderRadius: 6, marginBottom: "0.75rem", overflow: "hidden" }}>
+          <div style={{ background: "#f8f9fa", padding: "0.6rem 0.9rem", borderBottom: "1px solid #e0e0e0", fontSize: "0.85rem", color: "#333" }}>
+            <strong>References</strong>
+            {linksData && (
+              <span style={{ color: "#888" }}>
+                {" "}from {linksData.analyzed.toLocaleString()} {linksData.resourceType} resources
+                {linksData.sampled ? " (sampled)" : ""}
+              </span>
+            )}
+          </div>
+          {linksLoading && <div style={{ padding: "1rem", color: "#666", fontSize: "0.85rem" }}>Checking references...</div>}
+          {!linksLoading && linksData && linksData.links.length === 0 && (
+            <div style={{ padding: "1rem", color: "#666", fontSize: "0.85rem" }}>
+              This resource type has no references to other resources.
+            </div>
+          )}
+          {!linksLoading && linksData && linksData.links.length > 0 && (
+            <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.8rem" }}>
+              <thead>
+                <tr style={{ textAlign: "left", color: "#666" }}>
+                  <th style={{ padding: "0.4rem 0.9rem", fontWeight: 500 }}>Link</th>
+                  <th style={{ padding: "0.4rem 0.5rem", fontWeight: 500 }}>References</th>
+                  <th style={{ padding: "0.4rem 0.5rem", fontWeight: 500 }}>Targets</th>
+                  <th style={{ padding: "0.4rem 0.5rem", fontWeight: 500, width: 200 }}>Found in dataset</th>
+                  <th style={{ padding: "0.4rem 0.9rem", fontWeight: 500 }}>Missing examples</th>
+                </tr>
+              </thead>
+              <tbody>
+                {linksData.links.map((l) => {
+                  const pct = Math.round(l.resolution * 100);
+                  return (
+                    <tr key={`${l.path}->${l.target_type}`} style={{ borderTop: "1px solid #f0f0f0" }}>
+                      <td style={{ padding: "0.4rem 0.9rem", whiteSpace: "nowrap", color: "#333" }}>
+                        {l.path} <span style={{ color: "#94a3b8" }}>to</span>{" "}
+                        <strong style={{ color: "#334155" }}>{l.target_type}</strong>
+                      </td>
+                      <td style={{ padding: "0.4rem 0.5rem", color: "#666" }}>{l.references.toLocaleString()}</td>
+                      <td style={{ padding: "0.4rem 0.5rem", color: "#666" }}>{l.distinct_targets.toLocaleString()}</td>
+                      <td style={{ padding: "0.4rem 0.5rem" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <div style={{ flex: 1, height: 6, background: "#eee", borderRadius: 3, overflow: "hidden" }}>
+                            <div style={{ width: `${pct}%`, height: "100%", background: pct === 100 ? "#28a745" : pct > 0 ? "#ffc107" : "#dc3545" }} />
+                          </div>
+                          <span style={{ color: "#666", width: 34, textAlign: "right" }}>{pct}%</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "0.4rem 0.9rem", color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 260 }}>
+                        {l.dangling_examples.length ? l.dangling_examples.join(", ") : "none"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           )}
         </div>
       )}
@@ -743,6 +888,26 @@ function LocalFileViewer() {
                 <X size={20} color="#666" />
               </button>
             </div>
+            {selectedRefs.length > 0 && (
+              <div style={{ marginBottom: "0.75rem" }}>
+                <div style={{ fontSize: "0.75rem", color: "#888", marginBottom: 4 }}>
+                  Referenced resources (click to follow)
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {selectedRefs.map(({ path, ref }) => (
+                    <button
+                      key={`${path}:${ref}`}
+                      onClick={() => followReference(ref)}
+                      title={`Open ${ref}`}
+                      style={{ display: "flex", alignItems: "center", gap: 4, background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1d4ed8", borderRadius: 12, padding: "0.2rem 0.6rem", cursor: "pointer", fontSize: "0.75rem" }}
+                    >
+                      <LinkIcon size={12} />
+                      <span style={{ color: "#64748b" }}>{path}:</span> {ref}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <pre
               style={{
                 background: "#0d1117", color: "#c9d1d9", padding: "1rem", borderRadius: 6,
