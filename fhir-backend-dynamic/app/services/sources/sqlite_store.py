@@ -349,6 +349,40 @@ class SqliteFhirStore:
         ).fetchone()
         return json.loads(row[0]) if row else None
 
+    def sample_resources(self, resource_type: str, limit: int) -> List[Dict[str, Any]]:
+        """Return up to ``limit`` resources spread evenly across the whole type.
+
+        Profiling by running one aggregate query per column does not scale: each
+        ``json_extract`` re-parses every stored body, so 25 columns over a
+        million rows means 25 full scans. Instead we read one evenly strided
+        sample and profile every column from it in a single pass.
+
+        Striding on ``seq`` keeps the sample representative of the entire file
+        rather than just its beginning, which matters when exports are grouped
+        by patient or date.
+        """
+        total = self.count(resource_type)
+        if total == 0 or limit <= 0:
+            return []
+        if total <= limit:
+            rows = self._conn.execute(
+                "SELECT body FROM resources WHERE rtype = ? ORDER BY seq", (resource_type,)
+            ).fetchall()
+        else:
+            stride = max(1, total // limit)
+            rows = self._conn.execute(
+                "SELECT body FROM resources WHERE rtype = ? AND seq % ? = 0 ORDER BY seq LIMIT ?",
+                (resource_type, stride, limit),
+            ).fetchall()
+
+        out: List[Dict[str, Any]] = []
+        for (body,) in rows:
+            try:
+                out.append(json.loads(body))
+            except json.JSONDecodeError:  # pragma: no cover - defensive
+                continue
+        return out
+
     def close(self) -> None:
         """Close the connection and delete the backing file if we created it."""
         try:

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional
 
+from app.services.sources import profile as profile_service
 from app.services.sources.base import SourceLoader
 from app.services.sources.sqlite_store import SqliteFhirStore
 
@@ -65,6 +66,35 @@ class StreamingFileSource(SourceLoader):
 
     def read(self, resource_type: str, resource_id: str) -> Optional[Dict[str, Any]]:
         return self._store.read(resource_type, resource_id)
+
+    def profile(
+        self,
+        resource_type: str,
+        *,
+        top_n: int = 5,
+        max_columns: int = 25,
+        sample: int = 50_000,
+    ) -> Dict[str, Any]:
+        """Profile from an evenly strided sample of the stored resources.
+
+        Reading one sample and profiling every column from it is far cheaper
+        than aggregating each column separately in SQL, which would re-parse
+        every stored body once per column. Results are reported as sampled
+        whenever the type holds more resources than the sample size.
+        """
+        total = self.count(resource_type)
+        resources = self._store.sample_resources(resource_type, sample)
+        columns = profile_service.profile_resources(
+            resources, top_n=top_n, max_columns=max_columns
+        )
+        # Scale sampled counts up so completeness reads against the real total.
+        return {
+            "resourceType": resource_type,
+            "total": total,
+            "profiled": len(resources),
+            "sampled": len(resources) < total,
+            "columns": columns,
+        }
 
     def close(self) -> None:
         """Release the SQLite connection and delete the temp database."""

@@ -114,6 +114,17 @@ export function exportUrl(sourceId, resourceType, { format = "csv", q = "", sort
   return `${SOURCES_BASE}/${sourceId}/resources/${resourceType}/export?${qs}`;
 }
 
+/**
+ * Profile a resource type: per-column completeness, distinct counts, and the
+ * most common values, computed across every resource of that type.
+ */
+export async function profileResources(sourceId, resourceType, { topN = 5, maxColumns = 25 } = {}) {
+  const qs = new URLSearchParams({ top_n: String(topN), max_columns: String(maxColumns) });
+  return handle(
+    await fetch(`${SOURCES_BASE}/${sourceId}/resources/${resourceType}/profile?${qs}`)
+  );
+}
+
 /** Get inferred tabular columns for a resource type. */
 export async function getResourceSchema(sourceId, resourceType, sample = 20) {
   const qs = new URLSearchParams({ sample: String(sample) });

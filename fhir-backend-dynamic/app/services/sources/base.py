@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
 from app.services import schema
+from app.services.sources import profile as profile_service
 
 
 class SourceLoader(ABC):
@@ -62,6 +63,37 @@ class SourceLoader(ABC):
     @abstractmethod
     def count(self, resource_type: str) -> int:
         """Return the number of resources of ``resource_type`` in this source."""
+
+    def profile(
+        self,
+        resource_type: str,
+        *,
+        top_n: int = 5,
+        max_columns: int = 25,
+    ) -> Dict[str, Any]:
+        """Describe what is in this resource type: completeness and top values.
+
+        The default pulls the resources and profiles them in Python, which is
+        fine for in-memory sources. Disk-backed sources override this with SQL
+        aggregation so the same numbers come back over millions of rows.
+        """
+        total = self.count(resource_type)
+        bundle = self.search(resource_type, count=max(1, total), offset=0)
+        resources = [
+            entry.get("resource")
+            for entry in bundle.get("entry", [])
+            if isinstance(entry.get("resource"), dict)
+        ]
+        columns = profile_service.profile_resources(
+            resources, top_n=top_n, max_columns=max_columns
+        )
+        return {
+            "resourceType": resource_type,
+            "total": total,
+            "profiled": len(resources),
+            "sampled": len(resources) < total,
+            "columns": columns,
+        }
 
     def schema(self, resource_type: str, *, sample: int = 20) -> Dict[str, Any]:
         """Infer tabular columns for ``resource_type`` from a sample of records.

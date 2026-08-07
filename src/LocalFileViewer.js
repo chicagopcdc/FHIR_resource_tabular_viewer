@@ -5,7 +5,7 @@
 // so the table matches the rest of the app.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Upload, FileJson, Trash2, X, ArrowLeft, Cloud, Download } from "lucide-react";
+import { Upload, FileJson, Trash2, X, ArrowLeft, Cloud, Download, BarChart3 } from "lucide-react";
 import { flattenResource, displayValue } from "./api";
 import { readableRow, readableColumns, sortPathFor } from "./fhirDisplay";
 import * as sourcesApi from "./services/sourcesApi";
@@ -41,6 +41,9 @@ function LocalFileViewer() {
   const [viewMode, setViewMode] = useState("readable"); // "readable" | "raw"
   const [visibleColumns, setVisibleColumns] = useState(null); // null = use defaults
   const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
+  const [profileData, setProfileData] = useState(null); // dataset profile for activeType
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   // S3 load form state
   const [s3Open, setS3Open] = useState(false);
@@ -164,6 +167,32 @@ function LocalFileViewer() {
     },
     [adoptSource]
   );
+
+  // Profile the active type: what is populated and which values dominate.
+  // Fetched on demand and cleared when the resource type changes.
+  const toggleProfile = useCallback(async () => {
+    if (profileOpen) {
+      setProfileOpen(false);
+      return;
+    }
+    setProfileOpen(true);
+    if (profileData || !source || !activeType) return;
+    setProfileLoading(true);
+    try {
+      setProfileData(await sourcesApi.profileResources(source.source_id, activeType));
+    } catch (e) {
+      setError(e.message);
+      setProfileOpen(false);
+    } finally {
+      setProfileLoading(false);
+    }
+  }, [profileOpen, profileData, source, activeType]);
+
+  // A profile describes one resource type, so drop it when the type changes.
+  useEffect(() => {
+    setProfileData(null);
+    setProfileOpen(false);
+  }, [activeType]);
 
   // Download all matching resources (current filter + sort) as CSV or NDJSON.
   const handleExport = useCallback(
@@ -500,6 +529,19 @@ function LocalFileViewer() {
               )}
             </div>
           )}
+          <button
+            onClick={toggleProfile}
+            title="Show what is populated in this resource type"
+            style={{
+              display: "flex", alignItems: "center", gap: 4, borderRadius: 4, cursor: "pointer", fontSize: "0.8rem",
+              padding: "0.45rem 0.8rem",
+              border: profileOpen ? "1px solid #007bff" : "1px solid #dee2e6",
+              background: profileOpen ? "#007bff" : "white",
+              color: profileOpen ? "white" : "#555",
+            }}
+          >
+            <BarChart3 size={14} /> Profile
+          </button>
           <span style={{ marginLeft: "auto", color: "#888", fontSize: "0.85rem" }}>
             {total.toLocaleString()} {query ? "matches" : "resources"}
             {sortField ? ` · sorted by ${sortField} (${sortOrder})` : ""}
@@ -530,6 +572,71 @@ function LocalFileViewer() {
           {streaming
             ? `Streaming ${fmtSize(streaming.totalBytes)} to a disk-backed index. Large files take a moment, and the whole file stays searchable.`
             : "Loading…"}
+        </div>
+      )}
+
+      {/* Dataset profile: completeness and dominant values per column */}
+      {profileOpen && (
+        <div style={{ border: "1px solid #e0e0e0", borderRadius: 6, marginBottom: "0.75rem", overflow: "hidden" }}>
+          <div style={{ background: "#f8f9fa", padding: "0.6rem 0.9rem", borderBottom: "1px solid #e0e0e0", fontSize: "0.85rem", color: "#333" }}>
+            <strong>Dataset profile</strong>
+            {profileData && (
+              <span style={{ color: "#888" }}>
+                {" "}across {profileData.total.toLocaleString()} {profileData.resourceType} resources
+              </span>
+            )}
+          </div>
+          {profileLoading && <div style={{ padding: "1rem", color: "#666", fontSize: "0.85rem" }}>Profiling...</div>}
+          {!profileLoading && profileData && (
+            <div style={{ maxHeight: 340, overflowY: "auto" }}>
+              <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.8rem" }}>
+                <thead>
+                  <tr style={{ textAlign: "left", color: "#666" }}>
+                    <th style={{ padding: "0.4rem 0.9rem", fontWeight: 500 }}>Field</th>
+                    <th style={{ padding: "0.4rem 0.5rem", fontWeight: 500, width: 190 }}>Populated</th>
+                    <th style={{ padding: "0.4rem 0.5rem", fontWeight: 500, width: 90 }}>Distinct</th>
+                    <th style={{ padding: "0.4rem 0.9rem", fontWeight: 500 }}>Most common values</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {profileData.columns.map((c) => {
+                    const pct = Math.round(c.completeness * 100);
+                    return (
+                      <tr key={c.path} style={{ borderTop: "1px solid #f0f0f0" }}>
+                        <td style={{ padding: "0.4rem 0.9rem", whiteSpace: "nowrap", color: "#333" }}>{c.path}</td>
+                        <td style={{ padding: "0.4rem 0.5rem" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ flex: 1, height: 6, background: "#eee", borderRadius: 3, overflow: "hidden" }}>
+                              <div style={{ width: `${pct}%`, height: "100%", background: pct === 100 ? "#28a745" : pct >= 50 ? "#007bff" : "#ffc107" }} />
+                            </div>
+                            <span style={{ color: "#666", width: 34, textAlign: "right" }}>{pct}%</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: "0.4rem 0.5rem", color: "#666" }}>{c.distinct.toLocaleString()}</td>
+                        <td style={{ padding: "0.4rem 0.9rem" }}>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                            {c.populated === 0 ? (
+                              <span style={{ color: "#aaa" }}>none</span>
+                            ) : c.distinct === c.populated && c.populated > 1 ? (
+                              // Every resource has its own value, so listing a few
+                              // says nothing. That it is unique is the finding.
+                              <span style={{ color: "#888", fontStyle: "italic" }}>unique per resource</span>
+                            ) : (
+                              c.top_values.slice(0, 3).map((tv) => (
+                                <span key={tv.value} title={`${tv.value} (${tv.count.toLocaleString()})`} style={{ background: "#f1f5f9", borderRadius: 10, padding: "0.1rem 0.5rem", color: "#334155", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {tv.value} <span style={{ color: "#94a3b8" }}>{tv.count.toLocaleString()}</span>
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
