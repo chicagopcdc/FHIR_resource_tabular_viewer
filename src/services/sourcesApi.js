@@ -125,6 +125,17 @@ export async function profileResources(sourceId, resourceType, { topN = 5, maxCo
   );
 }
 
+/**
+ * Analyze where a resource type points and whether those links resolve inside
+ * the loaded dataset.
+ */
+export async function analyzeLinks(sourceId, resourceType, { sample = 20000 } = {}) {
+  const qs = new URLSearchParams({ sample: String(sample) });
+  return handle(
+    await fetch(`${SOURCES_BASE}/${sourceId}/resources/${resourceType}/links?${qs}`)
+  );
+}
+
 /** Get inferred tabular columns for a resource type. */
 export async function getResourceSchema(sourceId, resourceType, sample = 20) {
   const qs = new URLSearchParams({ sample: String(sample) });

@@ -243,6 +243,24 @@ async def profile_resources(
     }
 
 
+@router.get("/{source_id}/resources/{resource_type}/links")
+async def analyze_links(
+    source_id: str,
+    resource_type: str,
+    sample: int = Query(20_000, ge=1, le=200_000),
+):
+    """Report where this resource type points and whether those links resolve.
+
+    Resolution is checked against the loaded dataset, so a dangling link means
+    the target is not present in this file.
+    """
+    try:
+        loader = source_registry.get_source(source_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return {"success": True, "data": loader.links(resource_type, sample=sample)}
+
+
 @router.get("/{source_id}/resources/{resource_type}/schema")
 async def resource_schema(
     source_id: str,
