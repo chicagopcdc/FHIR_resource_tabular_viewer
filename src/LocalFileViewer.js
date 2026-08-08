@@ -5,7 +5,7 @@
 // so the table matches the rest of the app.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Upload, FileJson, Trash2, X, ArrowLeft, Cloud, Download, BarChart3, Link2 as LinkIcon } from "lucide-react";
+import { Upload, FileJson, Trash2, X, ArrowLeft, Cloud, Download, BarChart3, Link2 as LinkIcon, Tags } from "lucide-react";
 import { flattenResource, displayValue } from "./api";
 import { readableRow, readableColumns, sortPathFor } from "./fhirDisplay";
 import * as sourcesApi from "./services/sourcesApi";
@@ -47,6 +47,9 @@ function LocalFileViewer() {
   const [linksData, setLinksData] = useState(null); // reference integrity for activeType
   const [linksOpen, setLinksOpen] = useState(false);
   const [linksLoading, setLinksLoading] = useState(false);
+  const [termData, setTermData] = useState(null); // code system coverage
+  const [termOpen, setTermOpen] = useState(false);
+  const [termLoading, setTermLoading] = useState(false);
 
   // S3 load form state
   const [s3Open, setS3Open] = useState(false);
@@ -210,6 +213,25 @@ function LocalFileViewer() {
     }
   }, [linksOpen, linksData, source, activeType]);
 
+  // Which code systems does this type use, and are they standards?
+  const toggleTerminology = useCallback(async () => {
+    if (termOpen) {
+      setTermOpen(false);
+      return;
+    }
+    setTermOpen(true);
+    if (termData || !source || !activeType) return;
+    setTermLoading(true);
+    try {
+      setTermData(await sourcesApi.analyzeTerminology(source.source_id, activeType));
+    } catch (e) {
+      setError(e.message);
+      setTermOpen(false);
+    } finally {
+      setTermLoading(false);
+    }
+  }, [termOpen, termData, source, activeType]);
+
   // Jump from a reference in the drill-down to the resource it points at.
   const followReference = useCallback(
     async (ref) => {
@@ -232,6 +254,8 @@ function LocalFileViewer() {
     setProfileOpen(false);
     setLinksData(null);
     setLinksOpen(false);
+    setTermData(null);
+    setTermOpen(false);
   }, [activeType]);
 
   // Download all matching resources (current filter + sort) as CSV or NDJSON.
@@ -627,6 +651,19 @@ function LocalFileViewer() {
           >
             <LinkIcon size={14} /> Links
           </button>
+          <button
+            onClick={toggleTerminology}
+            title="Which code systems this data uses, and whether they are standards"
+            style={{
+              display: "flex", alignItems: "center", gap: 4, borderRadius: 4, cursor: "pointer", fontSize: "0.8rem",
+              padding: "0.45rem 0.8rem",
+              border: termOpen ? "1px solid #007bff" : "1px solid #dee2e6",
+              background: termOpen ? "#007bff" : "white",
+              color: termOpen ? "white" : "#555",
+            }}
+          >
+            <Tags size={14} /> Codes
+          </button>
           <span style={{ marginLeft: "auto", color: "#888", fontSize: "0.85rem" }}>
             {total.toLocaleString()} {query ? "matches" : "resources"}
             {sortField ? ` · sorted by ${sortField} (${sortOrder})` : ""}
@@ -721,6 +758,81 @@ function LocalFileViewer() {
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Terminology: which code systems this data speaks */}
+      {termOpen && (
+        <div style={{ border: "1px solid #e0e0e0", borderRadius: 6, marginBottom: "0.75rem", overflow: "hidden" }}>
+          <div style={{ background: "#f8f9fa", padding: "0.6rem 0.9rem", borderBottom: "1px solid #e0e0e0", fontSize: "0.85rem", color: "#333" }}>
+            <strong>Code systems</strong>
+            {termData && (
+              <span style={{ color: "#888" }}>
+                {" "}from {termData.analyzed.toLocaleString()} {termData.resourceType} resources
+                {termData.sampled ? " (sampled)" : ""}
+              </span>
+            )}
+          </div>
+          {termLoading && <div style={{ padding: "1rem", color: "#666", fontSize: "0.85rem" }}>Analyzing codes...</div>}
+          {!termLoading && termData && termData.total_codings === 0 && (
+            <div style={{ padding: "1rem", color: "#666", fontSize: "0.85rem" }}>
+              This resource type carries no coded concepts.
+            </div>
+          )}
+          {!termLoading && termData && termData.total_codings > 0 && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "0.7rem 0.9rem", borderBottom: "1px solid #f0f0f0", fontSize: "0.8rem", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color: "#666" }}>In recognized standards</span>
+                  <div style={{ width: 140, height: 8, background: "#eee", borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ width: `${Math.round(termData.standard_share * 100)}%`, height: "100%", background: termData.standard_share >= 0.9 ? "#28a745" : termData.standard_share >= 0.5 ? "#ffc107" : "#dc3545" }} />
+                  </div>
+                  <strong style={{ color: "#333" }}>{Math.round(termData.standard_share * 100)}%</strong>
+                </div>
+                <span style={{ color: "#666" }}>
+                  {termData.local_codings.toLocaleString()} local of {termData.total_codings.toLocaleString()} codings
+                </span>
+                {termData.text_only_concepts > 0 && (
+                  <span style={{ color: "#b45309", background: "#fef3c7", borderRadius: 10, padding: "0.1rem 0.5rem" }}>
+                    {termData.text_only_concepts.toLocaleString()} text only, no code
+                  </span>
+                )}
+                {termData.codings_without_system > 0 && (
+                  <span style={{ color: "#b91c1c", background: "#fee2e2", borderRadius: 10, padding: "0.1rem 0.5rem" }}>
+                    {termData.codings_without_system.toLocaleString()} with no system
+                  </span>
+                )}
+              </div>
+              <div style={{ maxHeight: 260, overflowY: "auto" }}>
+                <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.8rem" }}>
+                  <thead>
+                    <tr style={{ textAlign: "left", color: "#666" }}>
+                      <th style={{ padding: "0.4rem 0.9rem", fontWeight: 500 }}>System</th>
+                      <th style={{ padding: "0.4rem 0.5rem", fontWeight: 500 }}>Codings</th>
+                      <th style={{ padding: "0.4rem 0.5rem", fontWeight: 500 }}>Distinct</th>
+                      <th style={{ padding: "0.4rem 0.5rem", fontWeight: 500 }}>Used at</th>
+                      <th style={{ padding: "0.4rem 0.9rem", fontWeight: 500 }}>Examples</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {termData.systems.map((s) => (
+                      <tr key={s.system} style={{ borderTop: "1px solid #f0f0f0" }}>
+                        <td style={{ padding: "0.4rem 0.9rem", maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.uri || s.system}>
+                          <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", marginRight: 6, background: s.recognized ? "#28a745" : "#dc3545" }} />
+                          <strong style={{ color: "#333" }}>{s.system}</strong>
+                          {!s.recognized && <span style={{ color: "#b91c1c", marginLeft: 6 }}>local</span>}
+                        </td>
+                        <td style={{ padding: "0.4rem 0.5rem", color: "#666" }}>{s.codings.toLocaleString()}</td>
+                        <td style={{ padding: "0.4rem 0.5rem", color: "#666" }}>{s.distinct_codes.toLocaleString()}</td>
+                        <td style={{ padding: "0.4rem 0.5rem", color: "#666", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.paths.join(", ")}</td>
+                        <td style={{ padding: "0.4rem 0.9rem", color: "#94a3b8", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.examples.join(", ") || "none"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}

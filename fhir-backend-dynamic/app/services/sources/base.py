@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from app.services import schema
 from app.services.sources import links as links_service
 from app.services.sources import profile as profile_service
+from app.services.sources import terminology as terminology_service
 
 
 class SourceLoader(ABC):
@@ -95,6 +96,34 @@ class SourceLoader(ABC):
             "sampled": len(resources) < total,
             "columns": columns,
         }
+
+    def terminology(self, resource_type: str, *, sample: int = 20_000) -> Dict[str, Any]:
+        """Report which code systems this resource type uses.
+
+        Says how much of the coded data sits in recognized standards versus
+        local systems, which is what determines whether it can be pooled with
+        data from elsewhere.
+        """
+        total = self.count(resource_type)
+        resources = self._sample(resource_type, sample)
+        payload = terminology_service.analyze_terminology(resources)
+        payload.update({
+            "resourceType": resource_type,
+            "total": total,
+            "analyzed": len(resources),
+            "sampled": len(resources) < total,
+        })
+        return payload
+
+    def _sample(self, resource_type: str, limit: int) -> List[Dict[str, Any]]:
+        """Return up to ``limit`` resources. Disk-backed sources stride instead."""
+        total = self.count(resource_type)
+        bundle = self.search(resource_type, count=max(1, min(total, limit)), offset=0)
+        return [
+            entry.get("resource")
+            for entry in bundle.get("entry", [])
+            if isinstance(entry.get("resource"), dict)
+        ]
 
     def links(self, resource_type: str, *, sample: int = 20_000) -> Dict[str, Any]:
         """Report where this resource type points, and whether those links resolve.

@@ -243,6 +243,25 @@ async def profile_resources(
     }
 
 
+@router.get("/{source_id}/resources/{resource_type}/terminology")
+async def analyze_terminology(
+    source_id: str,
+    resource_type: str,
+    sample: int = Query(20_000, ge=1, le=200_000),
+):
+    """Report which code systems this resource type uses.
+
+    Distinguishes recognized standards from local systems, and counts concepts
+    that carry only free text or no system, since those cannot be pooled with
+    data coded elsewhere.
+    """
+    try:
+        loader = source_registry.get_source(source_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return {"success": True, "data": loader.terminology(resource_type, sample=sample)}
+
+
 @router.get("/{source_id}/resources/{resource_type}/links")
 async def analyze_links(
     source_id: str,
