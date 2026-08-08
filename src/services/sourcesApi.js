@@ -147,6 +147,18 @@ export async function analyzeTerminology(sourceId, resourceType, { sample = 2000
   );
 }
 
+/**
+ * Regroup the whole dataset by patient: one row per patient with counts per
+ * resource type. Spans every resource type, so it is source level.
+ */
+export async function patientCohort(sourceId, { samplePerType = 20000, limit = 500 } = {}) {
+  const qs = new URLSearchParams({
+    sample_per_type: String(samplePerType),
+    limit: String(limit),
+  });
+  return handle(await fetch(`${SOURCES_BASE}/${sourceId}/cohort?${qs}`));
+}
+
 /** Get inferred tabular columns for a resource type. */
 export async function getResourceSchema(sourceId, resourceType, sample = 20) {
   const qs = new URLSearchParams({ sample: String(sample) });

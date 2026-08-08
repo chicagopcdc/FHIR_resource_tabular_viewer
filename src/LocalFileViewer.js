@@ -5,7 +5,7 @@
 // so the table matches the rest of the app.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Upload, FileJson, Trash2, X, ArrowLeft, Cloud, Download, BarChart3, Link2 as LinkIcon, Tags } from "lucide-react";
+import { Upload, FileJson, Trash2, X, ArrowLeft, Cloud, Download, BarChart3, Link2 as LinkIcon, Tags, Users } from "lucide-react";
 import { flattenResource, displayValue } from "./api";
 import { readableRow, readableColumns, sortPathFor } from "./fhirDisplay";
 import * as sourcesApi from "./services/sourcesApi";
@@ -50,6 +50,9 @@ function LocalFileViewer() {
   const [termData, setTermData] = useState(null); // code system coverage
   const [termOpen, setTermOpen] = useState(false);
   const [termLoading, setTermLoading] = useState(false);
+  const [cohortData, setCohortData] = useState(null); // patient-level pivot
+  const [cohortOpen, setCohortOpen] = useState(false);
+  const [cohortLoading, setCohortLoading] = useState(false);
 
   // S3 load form state
   const [s3Open, setS3Open] = useState(false);
@@ -232,6 +235,25 @@ function LocalFileViewer() {
     }
   }, [termOpen, termData, source, activeType]);
 
+  // Pivot the dataset to patients. Source level, so it survives type switches.
+  const toggleCohort = useCallback(async () => {
+    if (cohortOpen) {
+      setCohortOpen(false);
+      return;
+    }
+    setCohortOpen(true);
+    if (cohortData || !source) return;
+    setCohortLoading(true);
+    try {
+      setCohortData(await sourcesApi.patientCohort(source.source_id));
+    } catch (e) {
+      setError(e.message);
+      setCohortOpen(false);
+    } finally {
+      setCohortLoading(false);
+    }
+  }, [cohortOpen, cohortData, source]);
+
   // Jump from a reference in the drill-down to the resource it points at.
   const followReference = useCallback(
     async (ref) => {
@@ -313,6 +335,9 @@ function LocalFileViewer() {
     setQuery("");
     setSortField(null);
     setSortOrder("asc");
+    // The cohort describes the whole source, so it only resets on unload.
+    setCohortData(null);
+    setCohortOpen(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [source]);
 
@@ -527,12 +552,27 @@ function LocalFileViewer() {
               <strong>{source.name}</strong>
               <span style={{ color: "#888" }}>· {source.total} resources · {source.resource_types?.length} types</span>
             </div>
-            <button
-              onClick={handleUnload}
-              style={{ display: "flex", alignItems: "center", gap: 4, background: "#f8f9fa", border: "1px solid #dee2e6", color: "#dc3545", padding: "0.4rem 0.8rem", borderRadius: 4, cursor: "pointer" }}
-            >
-              <Trash2 size={14} /> Unload
-            </button>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                onClick={toggleCohort}
+                title="Regroup the whole dataset by patient"
+                style={{
+                  display: "flex", alignItems: "center", gap: 4, borderRadius: 4, cursor: "pointer", fontSize: "0.85rem",
+                  padding: "0.4rem 0.8rem",
+                  border: cohortOpen ? "1px solid #007bff" : "1px solid #dee2e6",
+                  background: cohortOpen ? "#007bff" : "#f8f9fa",
+                  color: cohortOpen ? "white" : "#555",
+                }}
+              >
+                <Users size={14} /> Patients
+              </button>
+              <button
+                onClick={handleUnload}
+                style={{ display: "flex", alignItems: "center", gap: 4, background: "#f8f9fa", border: "1px solid #dee2e6", color: "#dc3545", padding: "0.4rem 0.8rem", borderRadius: 4, cursor: "pointer" }}
+              >
+                <Trash2 size={14} /> Unload
+              </button>
+            </div>
           </div>
           {preview && (
             <div style={{ background: "#d1e7dd", color: "#0a3622", border: "1px solid #a3cfbb", padding: "0.6rem 0.9rem", borderRadius: 4, marginBottom: "0.75rem", fontSize: "0.85rem" }}>
@@ -757,6 +797,80 @@ function LocalFileViewer() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Cohort: the dataset seen as patients rather than resources */}
+      {cohortOpen && (
+        <div style={{ border: "1px solid #e0e0e0", borderRadius: 6, marginBottom: "0.75rem", overflow: "hidden" }}>
+          <div style={{ background: "#f8f9fa", padding: "0.6rem 0.9rem", borderBottom: "1px solid #e0e0e0", fontSize: "0.85rem", color: "#333" }}>
+            <strong>Patients</strong>
+            {cohortData && (
+              <span style={{ color: "#888" }}>
+                {" "}{cohortData.total_patients.toLocaleString()} in this dataset
+                {cohortData.patients_referenced_only > 0 && (
+                  <span style={{ color: "#b45309" }}>
+                    {" "}({cohortData.patients_referenced_only.toLocaleString()} referenced but not present)
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
+          {cohortLoading && <div style={{ padding: "1rem", color: "#666", fontSize: "0.85rem" }}>Grouping by patient...</div>}
+          {!cohortLoading && cohortData && cohortData.total_patients === 0 && (
+            <div style={{ padding: "1rem", color: "#666", fontSize: "0.85rem" }}>
+              No resources in this dataset reference a patient.
+              {Object.keys(cohortData.unlinked || {}).length > 0 && (
+                <> Unlinked: {Object.entries(cohortData.unlinked).map(([t, n]) => `${t} (${n.toLocaleString()})`).join(", ")}.</>
+              )}
+            </div>
+          )}
+          {!cohortLoading && cohortData && cohortData.total_patients > 0 && (
+            <div style={{ maxHeight: 320, overflowY: "auto" }}>
+              <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.8rem" }}>
+                <thead>
+                  <tr style={{ textAlign: "left", color: "#666" }}>
+                    <th style={{ padding: "0.4rem 0.9rem", fontWeight: 500 }}>Patient</th>
+                    <th style={{ padding: "0.4rem 0.5rem", fontWeight: 500 }}>Total</th>
+                    {cohortData.resource_types.map((t) => (
+                      <th key={t} style={{ padding: "0.4rem 0.5rem", fontWeight: 500 }}>{t}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {cohortData.patients.map((p) => (
+                    <tr
+                      key={p.patient_id}
+                      onClick={() => p.present && followReference(p.reference)}
+                      style={{ borderTop: "1px solid #f0f0f0", cursor: p.present ? "pointer" : "default" }}
+                      onMouseEnter={(e) => p.present && (e.currentTarget.style.background = "#f6faff")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "white")}
+                    >
+                      <td style={{ padding: "0.4rem 0.9rem", whiteSpace: "nowrap", maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <span style={{ color: p.present ? "#1d4ed8" : "#94a3b8" }}>{p.reference}</span>
+                        {!p.present && (
+                          <span style={{ marginLeft: 6, color: "#b45309", background: "#fef3c7", borderRadius: 8, padding: "0 0.4rem" }}>
+                            not in file
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: "0.4rem 0.5rem", color: "#333", fontWeight: 500 }}>{p.total.toLocaleString()}</td>
+                      {cohortData.resource_types.map((t) => (
+                        <td key={t} style={{ padding: "0.4rem 0.5rem", color: p.counts[t] ? "#666" : "#ddd" }}>
+                          {(p.counts[t] || 0).toLocaleString()}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {cohortData.truncated && (
+                <div style={{ padding: "0.5rem 0.9rem", color: "#888", fontSize: "0.75rem", borderTop: "1px solid #f0f0f0" }}>
+                  Showing the first {cohortData.patients.length.toLocaleString()} patients by data volume.
+                </div>
+              )}
             </div>
           )}
         </div>
