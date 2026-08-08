@@ -528,7 +528,7 @@ const DynamicFilterSidebar = ({
                     <input 
                       type="checkbox" 
                       className="filter-checkbox"
-                      checked={(activeFilters.state || []).includes(option.value)}
+                      checked={(stagedFilters.state || []).includes(option.value)}
                       onChange={(e) => handleFilterChange('state', option.value, e.target.checked)}
                     />
                     <span className="filter-option-text">
