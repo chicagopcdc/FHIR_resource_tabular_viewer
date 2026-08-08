@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
 from app.services import schema
+from app.services.sources import cohort as cohort_service
 from app.services.sources import links as links_service
 from app.services.sources import profile as profile_service
 from app.services.sources import terminology as terminology_service
@@ -96,6 +97,24 @@ class SourceLoader(ABC):
             "sampled": len(resources) < total,
             "columns": columns,
         }
+
+    def cohort(self, *, sample_per_type: int = 20_000, limit: int = 500) -> Dict[str, Any]:
+        """Regroup the whole dataset by patient rather than by resource type.
+
+        Unlike the other analyses this spans every resource type, since a
+        patient's data is scattered across them.
+        """
+        def per_type():
+            for resource_type in self.resource_types():
+                yield resource_type, self._sample(resource_type, sample_per_type)
+
+        payload = cohort_service.build_cohort(
+            per_type(),
+            patient_exists=lambda pid: self.read("Patient", pid) is not None,
+            limit=limit,
+        )
+        payload["analyzed_types"] = self.resource_types()
+        return payload
 
     def terminology(self, resource_type: str, *, sample: int = 20_000) -> Dict[str, Any]:
         """Report which code systems this resource type uses.
