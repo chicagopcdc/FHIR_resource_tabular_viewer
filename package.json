@@ -13,7 +13,8 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "dev": "concurrently \"bash scripts/start-backend-dev.sh\" \"npm start\" --names \"backend,frontend\" --prefix-colors \"blue,green\""
   },
   "browserslist": {
     "production": [
@@ -28,6 +29,7 @@
     ]
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "react-scripts": "5.0.1"
   }
 }
