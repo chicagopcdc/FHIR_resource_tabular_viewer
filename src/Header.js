@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Search, RefreshCw, Filter } from "lucide-react";
 
 const Header = ({
@@ -9,15 +9,31 @@ const Header = ({
 }) => {
   const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm);
 
+  // Ref for debounce timer
+  const debounceTimeout = useRef(null);
+
   // Sync local search term with prop changes (e.g., from session storage restoration)
   React.useEffect(() => {
     setLocalSearchTerm(searchTerm);
   }, [searchTerm]);
 
+  // Debounced automatic search when typing
+  useEffect(() => {
+    if (debounceTimeout.current) {
+      clearTimeout(debounceTimeout.current);
+    }
+
+    debounceTimeout.current = setTimeout(() => {
+      onSearchChange && onSearchChange(localSearchTerm);
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(debounceTimeout.current);
+  }, [localSearchTerm, onSearchChange]);
+
   const handleSearchInputChange = (event) => {
     const term = event.target.value;
     setLocalSearchTerm(term);
-    // Don't trigger search on keystroke - only on button click or Enter
+    // Don't trigger search on keystroke - debounced search will handle auto-search
   };
 
   const handleSearchSubmit = () => {
