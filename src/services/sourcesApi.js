@@ -136,6 +136,17 @@ export async function analyzeLinks(sourceId, resourceType, { sample = 20000 } = 
   );
 }
 
+/**
+ * Report which code systems a resource type uses, and how much of its coded
+ * data sits in recognized standards rather than local systems.
+ */
+export async function analyzeTerminology(sourceId, resourceType, { sample = 20000 } = {}) {
+  const qs = new URLSearchParams({ sample: String(sample) });
+  return handle(
+    await fetch(`${SOURCES_BASE}/${sourceId}/resources/${resourceType}/terminology?${qs}`)
+  );
+}
+
 /** Get inferred tabular columns for a resource type. */
 export async function getResourceSchema(sourceId, resourceType, sample = 20) {
   const qs = new URLSearchParams({ sample: String(sample) });
