@@ -1,5 +1,6 @@
 from typing import Any, Dict, List
 from collections import defaultdict
+from app.services.path_extractor import extract_single_value_by_path
 import logging
 
 logger = logging.getLogger(__name__)
@@ -104,7 +105,7 @@ def analyze_sample_values(resources: List[Dict], path: str) -> Dict[str, Any]:
     
     try:
         for resource in resources:
-            value = _extract_value_by_path(resource, path)
+            value = extract_single_value_by_path(resource, path)
             if value is not None:
                 values.append(value)
                 value_types.add(type(value).__name__)
@@ -119,70 +120,3 @@ def analyze_sample_values(resources: List[Dict], path: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error analyzing values for path {path}: {str(e)}")
         return {"sample_count": 0, "all_null": True}
-
-def _extract_value_by_path(resource: Dict, path: str) -> Any:
-    """
-    Extract value from resource using dotted path notation
-    Handles arrays with [index] notation
-    """
-    try:
-        current = resource
-        parts = _parse_path(path)
-        
-        for part in parts:
-            if isinstance(part, dict) and part.get("type") == "array_index":
-                if isinstance(current, list) and part["index"] < len(current):
-                    current = current[part["index"]]
-                else:
-                    return None
-            elif isinstance(current, dict) and part in current:
-                current = current[part]
-            else:
-                return None
-                
-        return current
-    except Exception:
-        return None
-
-def _parse_path(path: str) -> List:
-    """
-    Parse dotted path with array indices into parts
-    Example: "code.coding[0].display" -> ["code", "coding", {"type": "array_index", "index": 0}, "display"]
-    """
-    parts = []
-    current = ""
-    i = 0
-    
-    while i < len(path):
-        char = path[i]
-        
-        if char == '.':
-            if current:
-                parts.append(current)
-                current = ""
-        elif char == '[':
-            # Found array index
-            if current:
-                parts.append(current)
-                current = ""
-            # Find closing bracket
-            j = i + 1
-            while j < len(path) and path[j] != ']':
-                j += 1
-            if j < len(path):
-                try:
-                    index = int(path[i+1:j])
-                    parts.append({"type": "array_index", "index": index})
-                except ValueError:
-                    pass  # Invalid index, skip
-                i = j
-            else:
-                break  # No closing bracket
-        else:
-            current += char
-        i += 1
-    
-    if current:
-        parts.append(current)
-        
-    return parts
