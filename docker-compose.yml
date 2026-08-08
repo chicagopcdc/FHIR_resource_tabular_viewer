@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./fhir-backend-dynamic
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - ENABLE_DOCS=1
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_BASE_URL=http://backend:8000
+    depends_on:
+      - backend
