@@ -16,7 +16,7 @@
 
 .add-tab-modal {
   background: white;
-  border-radius: 12px;
+  border-radius: 14px;
   width: 100%;
   max-width: 1200px; /* Increased for better card display */
   max-height: 90vh;
@@ -30,7 +30,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
+  padding: 20px 25px;
   border-bottom: 1px solid #e9ecef;
   background: #f8f9fa;
   flex-shrink: 0; /* Prevent header from shrinking */
@@ -39,7 +39,7 @@
 .modal-header h3 {
   margin: 0;
   font-size: 1.5rem;
-  font-weight: 600;
+  font-weight: 601;
   color: #343a40;
 }
 
@@ -55,8 +55,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 33px;
+  height: 33px;
 }
 
 .close-btn:hover {
