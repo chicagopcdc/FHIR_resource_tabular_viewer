@@ -1,4 +1,8 @@
 // Tab-specific filtering service with caching
+import {config} from '../config';
+
+const API_BASE = config.api.baseUrl;
+
 class TabFilterService {
   constructor() {
     this.cache = new Map();
@@ -77,7 +81,7 @@ class TabFilterService {
         }
       });
 
-      const url = `http://localhost:8000/api/resources/Patient/${patientId}/resources/${resourceType}/filtered?${queryParams}`;
+      const url = `${API_BASE}/api/resources/Patient/${patientId}/resources/${resourceType}/filtered?${queryParams}`;
       
       const response = await fetch(url);
       const data = await response.json();
@@ -114,7 +118,7 @@ class TabFilterService {
 
     try {
       // Fetch all data first to analyze filter options
-      const url = `http://localhost:8000/api/resources/Patient/${patientId}/resources/${resourceType}`;
+      const url = `${API_BASE}/api/resources/Patient/${patientId}/resources/${resourceType}`;
       const response = await fetch(url);
       const data = await response.json();
 
