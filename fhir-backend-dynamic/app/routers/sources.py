@@ -157,6 +157,28 @@ async def get_source(source_id: str):
         raise HTTPException(status_code=404, detail="Source not found")
 
 
+@router.get("/{source_id}/cohort")
+async def patient_cohort(
+    source_id: str,
+    sample_per_type: int = Query(20_000, ge=1, le=200_000),
+    limit: int = Query(500, ge=1, le=5000),
+):
+    """Regroup the dataset by patient: one row per patient, counts per type.
+
+    Spans every resource type, since a patient's data is scattered across them.
+    Patients that are only referenced and never present are included and marked,
+    because a cohort built on them would lack demographics.
+    """
+    try:
+        loader = source_registry.get_source(source_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return {
+        "success": True,
+        "data": loader.cohort(sample_per_type=sample_per_type, limit=limit),
+    }
+
+
 @router.get("/{source_id}/resources/{resource_type}")
 async def search_resources(
     source_id: str,
