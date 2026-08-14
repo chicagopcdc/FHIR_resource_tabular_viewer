@@ -30,7 +30,7 @@ _config_cache = {
 }
 CONFIG_CACHE_DURATION = timedelta(hours=config.config_cache_duration_hours)
 
-def _get_cache_key(params: Dict[str, str]) -> str:
+def _get_cache_key(resource_type: str, params: Dict[str, str]) -> Optional[str]:
     """Generate cache key from parameters - FIXED: Include filter parameters"""
     # Create a stable cache key that includes filter parameters
     cache_params = []
@@ -51,7 +51,8 @@ def _get_cache_key(params: Dict[str, str]) -> str:
     
     # Only cache if it's not too complex (max 6 parameters)
     if len(cache_params) <= 6:
-        cache_key = "patients_" + "_".join(cache_params)
+        # cache_key = "patients_" + "_".join(cache_params)
+        cache_key = f"{resource_type.lower()}_" + "_".join(cache_params)
         logger.debug(f"Generated cache key: {cache_key}")
         return cache_key
     
@@ -83,7 +84,7 @@ def _cache_response(cache_key: str, response: Dict):
             _patient_cache.pop(oldest_key, None)
             _cache_expiry.pop(oldest_key, None)
 
-async def _prefetch_next_page(current_params: Dict[str, str], pagination: Dict):
+async def _prefetch_next_page(resource_type: str, current_params: Dict[str, str], pagination: Dict):
     """Background prefetch of the next page"""
     try:
         if not pagination.get("has_next"):
@@ -97,7 +98,7 @@ async def _prefetch_next_page(current_params: Dict[str, str], pagination: Dict):
         next_params = current_params.copy()
         next_params["_getpagesoffset"] = str(next_offset)
         
-        next_cache_key = _get_cache_key(next_params)
+        next_cache_key = _get_cache_key(resource_type, next_params)
         if next_cache_key and not _get_cached_response(next_cache_key):
             logger.info(f"Background prefetching next page: offset {next_offset}")
             
@@ -2183,7 +2184,7 @@ async def search_resources(
         # Check cache AFTER parameters are finalized (including sort)
         cache_key = None
         if resource_type.lower() == "patient":
-            cache_key = _get_cache_key(params)
+            cache_key = _get_cache_key(resource_type, params)
             cached_response = _get_cached_response(cache_key)
             if cached_response:
                 return cached_response
@@ -2257,8 +2258,14 @@ async def search_resources(
             _cache_response(cache_key, response)
             
             # Background prefetch next page
-            asyncio.create_task(_prefetch_next_page(params, response.get("pagination", {})))
-            
+            async def safe_prefetch():
+                try:
+                    await _prefetch_next_page(resource_type, params, response.get("pagination", {}))
+                except Exception as e:
+                    logger.error(f"Prefetch failed: {e}")
+
+            asyncio.create_task(safe_prefetch())
+                        
         return response
 
     except Exception as e:
