@@ -1,17 +1,44 @@
 from fastapi import APIRouter, HTTPException, Query
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import httpx
 import logging
 from app.config import config
 from app.services.schema import infer_columns
 import asyncio
+from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/metadata", tags=["metadata"])
 logger = logging.getLogger(__name__)
 
-# Cache for metadata responses
+# Cache for metadata responses. Entries are (expires_at, value) and both caches
+# are bounded, otherwise every distinct server_url / resource_type / sample_size
+# combination stays in memory for the life of the process.
 _metadata_cache = {}
 _resource_schema_cache = {}
+METADATA_CACHE_DURATION = timedelta(hours=config.resource_cache_duration_hours)
+MAX_METADATA_CACHE_ENTRIES = config.max_cache_entries
+
+def _cache_get(cache: Dict[str, Any], key: str) -> Optional[Any]:
+    """Get a cached value if it has not expired yet"""
+    entry = cache.get(key)
+    if entry is None:
+        return None
+
+    expires_at, value = entry
+    if datetime.now() >= expires_at:
+        # Cache expired, remove it
+        cache.pop(key, None)
+        return None
+
+    return value
+
+def _cache_set(cache: Dict[str, Any], key: str, value: Any):
+    """Cache a value and drop the entries closest to expiry once over the cap"""
+    cache[key] = (datetime.now() + METADATA_CACHE_DURATION, value)
+
+    while len(cache) > MAX_METADATA_CACHE_ENTRIES:
+        oldest_key = min(cache, key=lambda k: cache[k][0])
+        cache.pop(oldest_key, None)
 
 @router.get("/capability-statement")
 async def get_fhir_capability_statement(server_url: Optional[str] = None):
@@ -24,9 +51,10 @@ async def get_fhir_capability_statement(server_url: Optional[str] = None):
         metadata_url = f"{target_url.rstrip('/')}/metadata"
         
         # Check cache first
-        if metadata_url in _metadata_cache:
+        cached_metadata = _cache_get(_metadata_cache, metadata_url)
+        if cached_metadata is not None:
             logger.info(f"Returning cached metadata for {metadata_url}")
-            return _metadata_cache[metadata_url]
+            return cached_metadata
         
         logger.info(f"Fetching FHIR metadata from: {metadata_url}")
         
@@ -40,7 +68,7 @@ async def get_fhir_capability_statement(server_url: Optional[str] = None):
             processed_metadata = process_capability_statement(capability_statement)
             
             # Cache the result
-            _metadata_cache[metadata_url] = processed_metadata
+            _cache_set(_metadata_cache, metadata_url, processed_metadata)
             
             return processed_metadata
             
@@ -76,7 +104,7 @@ async def get_supported_resources(server_url: Optional[str] = None):
 async def get_resource_schema(
     resource_type: str, 
     server_url: Optional[str] = None,
-    sample_size: int = Query(default=10, description="Number of resources to sample for schema inference")
+    sample_size: int = Query(default=10, ge=1, le=100, description="Number of resources to sample for schema inference")
 ):
     """
     Get inferred schema for a specific FHIR resource type
@@ -87,9 +115,10 @@ async def get_resource_schema(
         cache_key = f"{target_url}:{resource_type}:{sample_size}"
         
         # Check cache first
-        if cache_key in _resource_schema_cache:
+        cached_schema = _cache_get(_resource_schema_cache, cache_key)
+        if cached_schema is not None:
             logger.info(f"Returning cached schema for {resource_type}")
-            return _resource_schema_cache[cache_key]
+            return cached_schema
         
         # Get capability statement first
         capability_statement = await get_fhir_capability_statement(server_url)
@@ -142,7 +171,7 @@ async def get_resource_schema(
             }
             
             # Cache the result
-            _resource_schema_cache[cache_key] = schema_info
+            _cache_set(_resource_schema_cache, cache_key, schema_info)
             
             return schema_info
             
