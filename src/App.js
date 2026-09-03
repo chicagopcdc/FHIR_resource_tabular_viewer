@@ -1026,7 +1026,6 @@ const MainPage = () => {
             pagination={pagination}
             onPageChange={handlePageChange}
             onPageSizeChange={handlePageSizeChange}
-            fhirBaseUrl="https://hapi.fhir.org/baseR4"
             onFhirSearch={handleFhirSearchResults}
           />
         )}

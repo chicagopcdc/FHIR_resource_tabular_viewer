@@ -14,7 +14,6 @@ const DynamicFilterSidebar = ({
   pagination = {},
   onPageChange,
   onPageSizeChange,
-  fhirBaseUrl = 'https://hapi.fhir.org/baseR4', // Add FHIR base URL prop
   onFhirSearch  // Add callback for FHIR search results
 }) => {
   // Dynamic filter targets state
@@ -134,32 +133,11 @@ const DynamicFilterSidebar = ({
 
   // FHIR Search functionality 
   const executeFhirSearch = async (searchParams) => {
-    if (!fhirBaseUrl) return null;
-    
-    try {
-      // Ensure we're searching for Patients specifically
-      const url = new URL(`${fhirBaseUrl}/Patient`);
-      Object.entries(searchParams).forEach(([key, value]) => {
-        if (value && value !== 'all') {
-          url.searchParams.append(key, value);
-        }
-      });
-
-      console.log('FHIR Search URL:', url.toString());
-      const response = await fetch(url.toString());
-      const data = await response.json();
-      
-      if (onFhirSearch) {
-        onFhirSearch(data, searchParams);
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('FHIR search error:', error);
-      return null;
-    }
-  };
-
+  const queryString = new URLSearchParams(searchParams).toString();
+  const data = await api.get(`/resources/Patient?${queryString}`);
+  if (onFhirSearch) onFhirSearch(data, searchParams);
+  return data;
+};
 
   // Fetch filter targets and UI config on mount
   useEffect(() => {
