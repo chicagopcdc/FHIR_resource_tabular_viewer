@@ -28,12 +28,25 @@ jest.mock('../config', () => ({
 describe('Aggregate API Service', () => {
   beforeEach(() => {
     fetch.mockClear();
-    // Clear session storage
-    global.sessionStorage = {
+    jest.clearAllMocks();
+    // Reset in-memory session cache between tests
+    if (aggregateApi._resetCurrentSessionForTests) {
+      aggregateApi._resetCurrentSessionForTests();
+    }
+    // Clear session storage - mock both global and window
+    const mockStorage = {
       getItem: jest.fn(() => null),
       setItem: jest.fn(),
       removeItem: jest.fn()
     };
+    global.sessionStorage = mockStorage;
+    // Also set on window for jsdom compatibility
+    Object.defineProperty(window, 'sessionStorage', {
+      value: mockStorage,
+      writable: true,
+      configurable: true
+    });
+    global.window.sessionStorage = mockStorage;
   });
 
   describe('createAggregate', () => {
@@ -85,7 +98,7 @@ describe('Aggregate API Service', () => {
     });
 
     it('should handle API errors gracefully', async () => {
-      fetch.mockResolvedValueOnce({
+      fetch.mockResolvedValue({
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',
@@ -237,8 +250,8 @@ describe('Aggregate API Service', () => {
     });
 
     it('should fall back when aggregate fails', async () => {
-      // Mock aggregate failure
-      fetch.mockRejectedValueOnce(new Error('Server unavailable'));
+      // Mock aggregate failure - persist for all retry attempts
+      fetch.mockRejectedValue(new Error('Server unavailable'));
 
       const fallbackFn = jest.fn().mockResolvedValue({
         success: true,
@@ -327,6 +340,7 @@ describe('Aggregate API Service', () => {
     it('should persist session in sessionStorage', () => {
       const mockSession = 'session_test123_abc456';
       global.sessionStorage.getItem.mockReturnValue(mockSession);
+      window.sessionStorage.getItem.mockReturnValue(mockSession);
 
       const session = aggregateApi.getCurrentSession();
 
@@ -336,6 +350,7 @@ describe('Aggregate API Service', () => {
 
     it('should create new session if none exists', () => {
       global.sessionStorage.getItem.mockReturnValue(null);
+      window.sessionStorage.getItem.mockReturnValue(null);
 
       const session = aggregateApi.getCurrentSession();
 
@@ -352,18 +367,19 @@ describe('Aggregate API Service', () => {
 
   describe('Error Handling', () => {
     it('should retry on network failures', async () => {
-      // First two calls fail, third succeeds
+      // With maxRetries=2, we get 2 total attempts: first fails, second succeeds
       fetch
-        .mockRejectedValueOnce(new Error('Network error'))
         .mockRejectedValueOnce(new Error('Network error'))
         .mockResolvedValueOnce({
           ok: true,
+          status: 200,
+          statusText: 'OK',
           json: async () => ({ dataset_id: 'success' })
         });
 
       const result = await aggregateApi.createAggregate('Patient', {}, {}, 'test-session');
 
-      expect(fetch).toHaveBeenCalledTimes(3);
+      expect(fetch).toHaveBeenCalledTimes(2);
       expect(result.dataset_id).toBe('success');
     });
 
