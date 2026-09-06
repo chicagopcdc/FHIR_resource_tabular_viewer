@@ -185,7 +185,11 @@ export async function fetchResourcesWithAggregate(resourceType, filters, paginat
   // Check if aggregate is enabled
   if (!CONFIG.features.aggregateEnabled) {
     console.log('📋 Aggregate disabled, using fallback');
-    return await fallbackFn();
+    const fallbackResult = await fallbackFn();
+    return {
+      ...fallbackResult,
+      aggregate_used: false,
+    };
   }
 
   try {
@@ -256,15 +260,30 @@ export function generateUserSession() {
  */
 let _currentSession = null;
 
+function getStorage() {
+  if (typeof window !== 'undefined' && window.sessionStorage) return window.sessionStorage;
+  if (typeof globalThis !== 'undefined' && globalThis.sessionStorage) return globalThis.sessionStorage;
+  if (typeof sessionStorage !== 'undefined') return sessionStorage;
+  return null;
+}
+
 export function getCurrentSession() {
   if (!_currentSession) {
-    // Try to restore from sessionStorage
-    _currentSession = sessionStorage.getItem('fhir_user_session');
+    const storage = getStorage();
+    if (storage) {
+      try {
+        _currentSession = storage.getItem('fhir_user_session');
+      } catch {}
+    }
     
     if (!_currentSession) {
       // Generate new session and store it
       _currentSession = generateUserSession();
-      sessionStorage.setItem('fhir_user_session', _currentSession);
+      if (storage) {
+        try {
+          storage.setItem('fhir_user_session', _currentSession);
+        } catch {}
+      }
     }
   }
   
@@ -276,5 +295,15 @@ export function getCurrentSession() {
  */
 export function clearCurrentSession() {
   _currentSession = null;
-  sessionStorage.removeItem('fhir_user_session');
+  const storage = getStorage();
+  if (storage) {
+    try {
+      storage.removeItem('fhir_user_session');
+    } catch {}
+  }
+}
+
+// Test helper to reset in-memory session between tests
+export function _resetCurrentSessionForTests() {
+  _currentSession = null;
 }

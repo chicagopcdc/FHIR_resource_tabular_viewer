@@ -184,7 +184,7 @@ export async function getPatientResources(patientId, resourceType, count = 50, p
     }
     
     // Cache the response
-    requestCache.set(cacheKey, normalizedResponse, resourceParams);
+    requestCache.set(cacheKey, resourceParams, normalizedResponse);
     return normalizedResponse;
   } catch (error) {
     console.error(`Error fetching ${resourceType} for patient ${patientId}:`, error);
