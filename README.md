@@ -324,13 +324,23 @@ git clone <repository-url>
 cd final-fhir
 ```
 
-2. **Install Dependencies**
+2. **Install Frontend Dependencies**
 
 ```bash
 npm install
 ```
 
-3. **Configure Environment**
+3. **Setup Backend Environment**
+
+```bash
+cd fhir-backend-dynamic
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cd ..
+```
+
+4. **Configure Environment** (Optional)
    Create `.env` file:
 
 ```env
@@ -339,13 +349,29 @@ REACT_APP_FHIR_BASE_URL=https://hapi.fhir.org/baseR4/
 REACT_APP_TITLE=FHIR Patient Search
 ```
 
-4. **Start Development Server**
+5. **Start Development Servers**
 
-```bash
-npm start
-```
+   **Option A: Single Command (Recommended)**
+   ```bash
+   npm run dev
+   ```
+   This starts both the backend API server (port 8000) and frontend dev server (port 3000) concurrently.
 
-5. **Access Application**
+   **Option B: Manual (Two Terminals)**
+   
+   Terminal 1 - Backend:
+   ```bash
+   cd fhir-backend-dynamic
+   source .venv/bin/activate
+   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   ```
+   
+   Terminal 2 - Frontend:
+   ```bash
+   npm start
+   ```
+
+6. **Access Application**
    Navigate to `http://localhost:3000`
 
 ### Production Build
