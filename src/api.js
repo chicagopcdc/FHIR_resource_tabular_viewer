@@ -184,7 +184,7 @@ export async function getPatientResources(patientId, resourceType, count = 50, p
     }
     
     // Cache the response
-    requestCache.set(cacheKey, normalizedResponse, resourceParams);
+    requestCache.set(cacheKey, resourceParams, normalizedResponse);
     return normalizedResponse;
   } catch (error) {
     console.error(`Error fetching ${resourceType} for patient ${patientId}:`, error);
@@ -472,17 +472,27 @@ export async function getById(resourceType, id) {
  */
 export async function getByIdDetailed(resourceType, id) {
   try {
+    // 1. Check cache first
+    const cacheKey = `${resourceType}/${id}/detailed`;
+    const cachedResponse = requestCache.get(cacheKey, {});
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+
     const response = await safeFetch(`/resources/${resourceType}/${id}/detailed`);
 
-
     if (response.success) {
-      return {
+      const formattedResponse = {
         success: true,
         fixed: response.fixed || {},
         dynamic: response.dynamic || {},
         all: response.all || null,
         resourceType: response.resource_type || resourceType,
       };
+      
+      // 2. Save to cache
+      requestCache.set(cacheKey, {}, formattedResponse);
+      return formattedResponse;
     }
 
     return {
@@ -591,7 +601,7 @@ export async function loadPatientsWithFilters(params = {}, appliedFilters = {}) 
       
       if (response.success) {
         // Cache the response
-        requestCache.set(cacheKey, response, params);
+        requestCache.set(cacheKey, params, response);
         console.log(`✅ Loaded ${response.data?.length || 0} filtered patients (${response.matching_patient_count} total matches)`);
         return response;
       } else {
