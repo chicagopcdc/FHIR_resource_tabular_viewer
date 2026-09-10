@@ -1,0 +1,12 @@
+node_modules
+build
+.git
+.gitignore
+
+fhir-backend-dynamic/.venv
+fhir-backend-dynamic/__pycache__
+fhir-backend-dynamic/**/__pycache__
+fhir-backend-dynamic/.pytest_cache
+
+.DS_Store
+.env
