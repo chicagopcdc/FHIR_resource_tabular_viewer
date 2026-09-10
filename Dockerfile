@@ -1,25 +1,26 @@
-FROM node:18
+FROM node:20-alpine AS build
 
-# Set the working directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json
 COPY package*.json ./
+RUN npm ci
 
-# Install dependencies
-RUN npm install
+COPY public ./public
+COPY src ./src
+COPY config.yaml ./config.yaml
+COPY dataUtils.js ./dataUtils.js
 
-# Copy the rest of the application code
-COPY . .
-
-# Build the application
 RUN npm run build
 
-# Install serve to serve the build folder
+
+FROM node:20-alpine
+
+WORKDIR /app
+
 RUN npm install -g serve
 
-# Expose the port the app runs on
+COPY --from=build /app/build ./build
+
 EXPOSE 3000
 
-# Command to run the application
-CMD ["serve", "-s", "build"]
+CMD ["serve", "-s", "build", "-l", "3000"]
