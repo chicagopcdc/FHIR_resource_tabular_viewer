@@ -4,6 +4,16 @@ import * as api from './api';
 import './PatientDetails.css';
 import'./Dynamic.css';
 
+const objectIdMap = new WeakMap();
+let nextFallbackId = 1;
+
+function getFallbackId(obj) {
+    if (!objectIdMap.has(obj)) {
+        objectIdMap.set(obj, `local-fallback-${nextFallbackId++}`);
+    }
+    return objectIdMap.get(obj);
+}
+
 const DynamicResourceTab = ({ 
   resourceType, 
   resourceLabel, 
@@ -201,7 +211,7 @@ const DynamicResourceTab = ({
     if (!obj || !path) return null;
     
     // Create cache key - use object ID if available, otherwise stringify (expensive but necessary)
-    const objId = obj.id || JSON.stringify(obj).slice(0, 50);
+    const objId = obj.id || getFallbackId(obj);
     const cacheKey = `${objId}_${path}`;
     
     // Check cache first
