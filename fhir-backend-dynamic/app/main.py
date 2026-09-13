@@ -9,8 +9,49 @@ from app.config import config
 import os
 import logging
 import asyncio
+from contextlib import asynccontextmanager
+from app.services.http import close_client
 
 ENABLE_DOCS = os.getenv("ENABLE_DOCS", "0") in ("1", "true", "True")
+
+# Global startup status
+startup_status = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Backend startup and shutdown initialization"""
+    global startup_status
+    logger = logging.getLogger(__name__)
+    
+    # --- STARTUP EVENT ---
+    logger.info("🚀 FHIR Patient Search Backend Starting Up...")
+    logger.info(f"📋 Configuration loaded from: config.yaml")
+    logger.info(f"🌐 FHIR Base URL: {config.fhir_base_url}")
+    logger.info(f"🚪 Backend Port: {config.backend_port}")
+    logger.info(f"🎯 Features Enabled: {sum(1 for f in config.features.values() if f)}")
+    
+    startup_status = await initialize_backend()
+    
+    if startup_status["success"]:
+        logger.info("✅ Backend startup completed successfully")
+        if startup_status["warnings"]:
+            for warning in startup_status["warnings"]:
+                logger.warning(f"   - {warning}")
+    else:
+        logger.error("❌ Backend startup failed")
+    
+    # App runs here
+    yield
+    
+    # --- SHUTDOWN EVENT ---
+    logger.info("🛑 FHIR Patient Search Backend Shutting Down...")
+    from app.routers.resources import _patient_cache, _config_cache
+    _patient_cache.clear()
+    _config_cache.clear()
+    
+    # Close our shared connection pool!
+    await close_client()
+    logger.info("✅ Backend shutdown completed")
 
 app = FastAPI(
     title="FHIR Patient Search Backend with Unified Configuration",
@@ -18,6 +59,7 @@ app = FastAPI(
     docs_url="/docs" if ENABLE_DOCS else None,
     redoc_url=None,
     openapi_url=None,
+    lifespan=lifespan
 )
 
 app.add_middleware(
@@ -28,9 +70,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global startup status
-startup_status = None
-
 # Enhanced logging with filter debugging
 logging.basicConfig(
     level=logging.INFO,
@@ -38,46 +77,6 @@ logging.basicConfig(
 )
 
 setup_logging(app)
-
-# Startup and shutdown event handlers
-@app.on_event("startup")
-async def startup_event():
-    """Backend startup initialization"""
-    global startup_status
-    logger = logging.getLogger(__name__)
-    
-    logger.info("🚀 FHIR Patient Search Backend Starting Up...")
-    logger.info(f"📋 Configuration loaded from: config.yaml")
-    logger.info(f"🌐 FHIR Base URL: {config.fhir_base_url}")
-    logger.info(f"🚪 Backend Port: {config.backend_port}")
-    logger.info(f"🎯 Features Enabled: {sum(1 for f in config.features.values() if f)}")
-    
-    # Initialize backend systems
-    startup_status = await initialize_backend()
-    
-    if startup_status["success"]:
-        logger.info("✅ Backend startup completed successfully")
-        if startup_status["warnings"]:
-            logger.warning(f"⚠️ Startup completed with {len(startup_status['warnings'])} warnings:")
-            for warning in startup_status["warnings"]:
-                logger.warning(f"   - {warning}")
-    else:
-        logger.error("❌ Backend startup failed")
-        for error in startup_status["errors"]:
-            logger.error(f"   - {error}")
-
-@app.on_event("shutdown") 
-async def shutdown_event():
-    """Backend shutdown cleanup"""
-    logger = logging.getLogger(__name__)
-    logger.info("🛑 FHIR Patient Search Backend Shutting Down...")
-    
-    # Clear caches and cleanup
-    from app.routers.resources import _patient_cache, _config_cache
-    _patient_cache.clear()
-    _config_cache.clear()
-    
-    logger.info("✅ Backend shutdown completed")
 
 # Include all routers
 app.include_router(health.router,     prefix="/api")

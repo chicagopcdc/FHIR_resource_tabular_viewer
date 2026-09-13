@@ -5,6 +5,7 @@ import logging
 from app.config import config
 from app.services.schema import infer_columns
 import asyncio
+from app.services.http import get_json
 
 router = APIRouter(prefix="/metadata", tags=["metadata"])
 logger = logging.getLogger(__name__)
@@ -30,19 +31,16 @@ async def get_fhir_capability_statement(server_url: Optional[str] = None):
         
         logger.info(f"Fetching FHIR metadata from: {metadata_url}")
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(metadata_url)
-            response.raise_for_status()
+        # FIXED: Use our shared client with automatic retries
+        capability_statement = await get_json(metadata_url, timeout_override=30.0)
             
-            capability_statement = response.json()
-            
-            # Process and extract useful information
-            processed_metadata = process_capability_statement(capability_statement)
-            
-            # Cache the result
-            _metadata_cache[metadata_url] = processed_metadata
-            
-            return processed_metadata
+        # Process and extract useful information
+        processed_metadata = process_capability_statement(capability_statement)
+        
+        # Cache the result
+        _metadata_cache[metadata_url] = processed_metadata
+        
+        return processed_metadata
             
     except httpx.HTTPError as e:
         logger.error(f"HTTP error fetching metadata: {str(e)}")
@@ -53,9 +51,7 @@ async def get_fhir_capability_statement(server_url: Optional[str] = None):
 
 @router.get("/supported-resources")
 async def get_supported_resources(server_url: Optional[str] = None):
-    """
-    Get list of supported FHIR resources from capability statement
-    """
+    # ... (keep your existing get_supported_resources function as is)
     try:
         capability_statement = await get_fhir_capability_statement(server_url)
         
@@ -100,51 +96,48 @@ async def get_resource_schema(
         
         logger.info(f"Fetching sample {resource_type} resources from: {sample_url}")
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            try:
-                response = await client.get(sample_url)
-                response.raise_for_status()
-                
-                bundle = response.json()
-                
-                # Extract resources from bundle
+        try:
+            # FIXED: Use our shared client
+            bundle = await get_json(sample_url, timeout_override=30.0)
+            
+            # Extract resources from bundle
+            resources = []
+            if bundle.get("resourceType") == "Bundle" and "entry" in bundle:
+                resources = [entry["resource"] for entry in bundle["entry"] if "resource" in entry]
+            elif bundle.get("resourceType") == resource_type:
+                resources = [bundle]
+            
+            # Infer schema from sample resources
+            inferred_columns = infer_columns(resources, max_paths=500) if resources else []
+            
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                logger.warning(f"No {resource_type} resources found on server (404) - will return basic schema")
                 resources = []
-                if bundle.get("resourceType") == "Bundle" and "entry" in bundle:
-                    resources = [entry["resource"] for entry in bundle["entry"] if "resource" in entry]
-                elif bundle.get("resourceType") == resource_type:
-                    resources = [bundle]
-                
-                # Infer schema from sample resources
-                inferred_columns = infer_columns(resources, max_paths=500) if resources else []
-                
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 404:
-                    logger.warning(f"No {resource_type} resources found on server (404) - will return basic schema")
-                    resources = []
-                    # Return basic FHIR resource schema when no data available
-                    inferred_columns = get_basic_fhir_schema(resource_type)
-                else:
-                    raise
+                # Return basic FHIR resource schema when no data available
+                inferred_columns = get_basic_fhir_schema(resource_type)
+            else:
+                raise
             
-            schema_info = {
-                "success": True,
-                "resource_type": resource_type,
-                "server_url": target_url,
-                "sample_size": len(resources),
-                "capability_info": resource_details,
-                "inferred_schema": {
-                    "total_columns": len(inferred_columns),
-                    "columns": inferred_columns[:100],  # Limit for response size
-                    "full_column_list": inferred_columns
-                },
-                "sample_data_available": len(resources) > 0,
-                "schema_confidence": "high" if len(resources) >= sample_size else "low"
-            }
-            
-            # Cache the result
-            _resource_schema_cache[cache_key] = schema_info
-            
-            return schema_info
+        schema_info = {
+            "success": True,
+            "resource_type": resource_type,
+            "server_url": target_url,
+            "sample_size": len(resources),
+            "capability_info": resource_details,
+            "inferred_schema": {
+                "total_columns": len(inferred_columns),
+                "columns": inferred_columns[:100],
+                "full_column_list": inferred_columns
+            },
+            "sample_data_available": len(resources) > 0,
+            "schema_confidence": "high" if len(resources) >= sample_size else "low"
+        }
+        
+        # Cache the result
+        _resource_schema_cache[cache_key] = schema_info
+        
+        return schema_info
             
     except httpx.HTTPError as e:
         logger.error(f"HTTP error fetching {resource_type} schema: {str(e)}")
