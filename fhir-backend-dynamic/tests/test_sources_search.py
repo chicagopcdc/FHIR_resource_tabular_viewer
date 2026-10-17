@@ -68,10 +68,11 @@ def test_sort_numeric():
     assert values == [5, 10, 20, 30]
 
 
-def test_sort_missing_value_sorts_last():
+@pytest.mark.parametrize("order", ["asc", "desc"])
+def test_sort_missing_value_sorts_last(order):
     data = list(DATA) + [{"resourceType": "Observation", "id": "o5", "status": "final"}]
     store = InMemoryFhirStore(data)
-    b = store.search("Observation", sort="valueQuantity.value", order="asc")
+    b = store.search("Observation", sort="valueQuantity.value", order=order)
     assert b["entry"][-1]["resource"]["id"] == "o5"
 
 

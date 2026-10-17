@@ -200,7 +200,16 @@ class InMemoryFhirStore:
                     return (0, float(value), "")
                 return (0, 0.0, str(value).lower())
 
-            items = sorted(items, key=sort_key, reverse=(order == "desc"))
+            valued = []
+            missing = []
+            for resource in items:
+                target = (
+                    missing
+                    if _extract_value_by_path(resource, sort) is None
+                    else valued
+                )
+                target.append(resource)
+            items = sorted(valued, key=sort_key, reverse=(order == "desc")) + missing
 
         matched = len(items)
         offset = max(0, offset)
